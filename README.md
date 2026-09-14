@@ -223,5 +223,4 @@ streamlit run app.py
 
 ## ข้อมูลรายวิชาและลิขสิทธิ์ (Course Information & License)
 - **รายวิชา:** CP461 Computer Vision
-- **สถาบัน:** มหาวิทยาลัยขอนแก่น (Khon Kaen University)
 - **ลิขสิทธิ์:** สำหรับใช้ประกอบการศึกษาและการประเมินผลโครงงานในรายวิชา CP461
