@@ -23,7 +23,7 @@
 | จัดการภาพ | Pillow |
 | Web App | Streamlit |
 | เก็บโค้ด | Git + GitHub (public repo) |
-| Deploy | Streamlit Community Cloud หรือ Hugging Face Spaces |
+| Deploy | Streamlit Community Cloud  |
 
 `requirements.txt`:
 ```
