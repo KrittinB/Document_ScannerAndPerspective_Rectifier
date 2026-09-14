@@ -114,23 +114,3 @@ document-scanner/
     └── pipeline_demo.ipynb  # เวอร์ชัน Colab (ทางเลือก/สำรอง)
 ```
 
----
-
-## 7. การแบ่งงาน 5 คน (อ้างอิงจากที่กลุ่มตกลงไว้)
-
-1. **Image Preprocessing** — resize, grayscale, blur, edge detection
-2. **Document Detection** — contour detection, หา 4 corners, robust fallback
-3. **Feature Matching** — SIFT/ORB, keypoints/descriptors, matching, ratio test
-4. **Homography & Transformation** — RANSAC, homography, perspective transform, A4 output
-5. **Web App / Integration / Testing** — Streamlit UI, รวมโค้ดทุกคน, ทดสอบ edge case, เตรียม deploy
-
----
-
-## 8. Checklist ก่อนส่งงาน
-
-- [ ] Pipeline ครบทุก step ตาม section 3 (ไม่ข้าม SIFT/ORB + ratio test + RANSAC)
-- [ ] มี visualization ของ keypoints/matches และ inlier/outlier ใน UI
-- [ ] ทดสอบกับภาพ edge case อย่างน้อย 3-5 แบบ (แสงไม่ดี, มุมเอียงมาก, พื้นหลังรก)
-- [ ] Deploy ขึ้น public URL สำเร็จ (Streamlit Cloud / Hugging Face Spaces)
-- [ ] GitHub repo สะอาด มี `requirements.txt` + README วิธีรัน
-- [ ] อัดวิดีโอ 10 นาทีพอดี มี voiceover + live demo + ทุกคนพูด
