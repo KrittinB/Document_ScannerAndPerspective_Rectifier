@@ -15,7 +15,7 @@
 
 ## 2. Tech stack
 
-| ส่วน | เทคโนโลยี |
+| ส่วนประกอบ | เทคโนโลยี |
 |---|---|
 | ภาษา | Python 3.10+ |
 | Computer Vision | OpenCV (`opencv-python`) |
