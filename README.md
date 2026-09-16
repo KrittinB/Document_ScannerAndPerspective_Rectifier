@@ -150,6 +150,7 @@ https://documentscannerandperspectiverectifier-ceuurr4pfg8wzjqzvrygv6.streamlit.
 | 10a. Rectify (Auto) | สร้าง Transform จาก 4 มุม แล้ว Warp จากภาพต้นฉบับความละเอียดเต็ม | `rectify_from_corners()` | `src/geometry.py` |
 | 10b. Rectify (Reference) | ใช้ $H$ จาก RANSAC ต่อกับเมทริกซ์ scale แล้ว Warp เป็น A4 พร้อมเช็คจำนวน inlier ขั้นต่ำ | `rectify_from_reference()` | `src/geometry.py` |
 | 11. Output Sizing | คำนวณขนาด A4 (1:1.414) และสลับแนวตั้ง/แนวนอนตามสัดส่วนของเอกสารที่ตรวจเจอ | `get_a4_dimensions()`, `quad_is_landscape()` | `src/geometry.py` |
+| 12. Enhancement | ปรับปรุงคุณภาพ ลบเงา (Division Normalization), Magic Color (CLAHE ใน LAB), Clean B&W (Adaptive Threshold), และ Grayscale | `apply_filter()`, `remove_shadows()` | `src/enhancement.py` |
 
 ---
 
@@ -157,19 +158,22 @@ https://documentscannerandperspectiverectifier-ceuurr4pfg8wzjqzvrygv6.streamlit.
 
 ```text
 document-scanner/
-├── app.py                         # Web Application หลักพัฒนาด้วย Streamlit (UI, Session State, Pipeline Runner)
-├── requirements.txt               # รายการ Python dependencies (opencv-python-headless, numpy, Pillow, streamlit)
+├── app.py                         # Web Application หลักพัฒนาด้วย Streamlit (UI, Filters, Pipeline Runner)
+├── requirements.txt               # รายการ Python dependencies (รองรับ Python 3.10+)
 ├── packages.txt                   # รายการ System packages สำหรับ Cloud Linux Environment (libgl1, libglib2.0-0)
 ├── README.md                      # เอกสารคู่มือการใช้งานและรายละเอียดโปรเจกต์
-├── CP461_document_scanner_spec.md    # ข้อกำหนดทางเทคนิคและเกณฑ์โครงงาน CP461
+├── CP461_document_scanner_spec.md # ข้อกำหนดทางเทคนิคและเกณฑ์โครงงาน CP461
+├── CHANGELOG.md                   # บันทึกการอัปเดตและประวัติการแก้บั๊กอย่างละเอียด
 ├── src/
 │   ├── __init__.py                # Source package initialization
 │   ├── preprocessing.py           # ฟังก์ชันปรับขนาดรูป, แปลง Grayscale, และ Gaussian Blur
 │   ├── detection.py               # ฟังก์ชัน Canny Edge, Morphological Closing, Contour Scoring, Corner Fallback
 │   ├── features.py                # ฟังก์ชันสกัดจุดเด่น (SIFT/ORB), การจับคู่ (BF/FLANN), และ Lowe's Ratio Test
 │   ├── geometry.py                # ฟังก์ชัน Homography, RANSAC, ขนาด A4 ตามทิศทาง และ Warp ทั้งสองโหมด
+│   ├── enhancement.py             # ระบบปรับปรุงภาพเอกสาร ลบเงามือถือ Magic Color และ Clean B&W
 │   └── utils.py                   # ฟังก์ชันวาดเส้นกรอบมุม, แสดงคู่จุด Match, Inliers/Outliers, และแปลง Format ภาพ
 └── tests/
+    ├── test_enhancement.py        # Automated unit tests สำหรับฟังก์ชัน Document Enhancement
     └── sample_images/             # ชุดภาพตัวอย่างสำหรับทดสอบระบบ
         ├── test1.webp             # ภาพเอกสารมุมเอียงทั่วไป
         └── test2.webp             # ภาพเอกสารมุมเอียงองศาสูง (Perspective จัด)
