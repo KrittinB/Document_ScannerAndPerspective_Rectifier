@@ -14,6 +14,7 @@ Streamlit Web App สำหรับ CP461 Group Project
                       โหมดนี้ H มาจาก feature matching จริง
 """
 
+import os
 import streamlit as st
 import numpy as np
 import cv2
@@ -204,6 +205,19 @@ st.markdown(
 MODE_AUTO = "Auto — ภาพเดียว (Contour)"
 MODE_REF = "Reference — 2 ภาพ (SIFT + RANSAC)"
 
+SAMPLE_DIR = os.path.join(os.path.dirname(__file__), "tests", "sample_images")
+SAMPLE_OPTIONS = {
+    "— อัปโหลดไฟล์ภาพด้วยตนเอง (Upload Custom File) —": (None, None),
+    "📄 [Standard 1] เอกสาร A4 แนวนอน (test1.webp)": ("test1.webp", None),
+    "📄 [Standard 2] เอกสารมุมเฉียงองศาสูง (test2.webp)": ("test2.webp", None),
+    "🔍 [Reference Pair] ภาพถ่ายเอียง + ภาพอ้างอิงตรง (SIFT + RANSAC)": ("ref1_skewed_photo.jpg", "ref1_flat_reference.jpg"),
+    "⚡ [Edge Case 1] มุมมองเอียงรุนแรง (Extreme Perspective)": ("edge1_extreme_perspective.jpg", None),
+    "⚡ [Edge Case 2] แสงเงาทอดทับขอบกระดาษ (Heavy Shadow)": ("edge2_heavy_shadow.jpg", None),
+    "⚡ [Edge Case 3] พื้นหลังโต๊ะทำงานรก (Cluttered Background)": ("edge3_cluttered_background.jpg", None),
+    "⚡ [Edge Case 4] มุมกระดาษถูกบดบัง (Corner Occluded)": ("edge4_corner_occluded.jpg", None),
+    "⚡ [Edge Case 5] กระดาษสีกลืนกับพื้นผิว (Low Contrast)": ("edge5_low_contrast.jpg", None),
+}
+
 
 def _init_state():
     defaults = {
@@ -212,6 +226,7 @@ def _init_state():
         "result": None,
         "step": 0,  # 0=upload, 1=detect/match, 2=estimate, 3=done
         "uploader_key": 0,
+        "sample_choice": list(SAMPLE_OPTIONS.keys())[0],
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -337,11 +352,43 @@ with col_settings:
         )
 
 with col_upload:
-    st.markdown('<div class="subsection-title">Upload Document Image</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subsection-title">Input Document Image</div>', unsafe_allow_html=True)
+
+    sample_list = list(SAMPLE_OPTIONS.keys())
+    cur_idx = sample_list.index(st.session_state.sample_choice) if st.session_state.sample_choice in sample_list else 0
+    selected_sample = st.selectbox(
+        "ชุดภาพตัวอย่างทดสอบ (Sample / Edge Cases)",
+        sample_list,
+        index=cur_idx,
+        help="เลือกภาพตัวอย่างทดสอบตามเกณฑ์และสภาพแวดล้อมต่าง ๆ เพื่อทดสอบระบบได้ทันที",
+    )
+
+    if selected_sample != st.session_state.sample_choice:
+        st.session_state.sample_choice = selected_sample
+        st.session_state.result = None
+        chosen_p, chosen_r = SAMPLE_OPTIONS[selected_sample]
+        if chosen_p is not None:
+            p_path = os.path.join(SAMPLE_DIR, chosen_p)
+            if os.path.exists(p_path):
+                st.session_state.uploaded_img = cv2.imread(p_path)
+                st.session_state.step = 1
+        else:
+            st.session_state.uploaded_img = None
+            st.session_state.step = 0
+
+        if chosen_r is not None:
+            r_path = os.path.join(SAMPLE_DIR, chosen_r)
+            if os.path.exists(r_path):
+                st.session_state.reference_img = cv2.imread(r_path)
+        else:
+            st.session_state.reference_img = None
+        st.rerun()
+
     uploaded_file = st.file_uploader(
-        "ภาพถ่ายเอกสารที่เอียง (JPG, PNG, WEBP)",
+        "หรืออัปโหลดภาพถ่ายเอกสารของคุณเอง (JPG, PNG, WEBP)",
         type=["jpg", "jpeg", "png", "webp"],
         key=f"file_upload_{st.session_state.uploader_key}",
+        help="หากอัปโหลดไฟล์ตรงนี้ จะนำภาพที่อัปโหลดมาใช้งานแทนภาพตัวอย่าง",
     )
 
     if uploaded_file is not None:
@@ -354,8 +401,11 @@ with col_upload:
             st.session_state.step = 1
 
     if mode == MODE_REF:
+        chosen_p, chosen_r = SAMPLE_OPTIONS.get(st.session_state.sample_choice, (None, None))
+        if chosen_r is not None and st.session_state.reference_img is not None:
+            st.caption(f"✓ โหลดภาพเอกสารอ้างอิงอัตโนมัติจากชุดตัวอย่าง: `{chosen_r}`")
         ref_file = st.file_uploader(
-            "ภาพเอกสารอ้างอิงที่แบนราบ — หน้าเดียวกัน ถ่ายตรง ๆ หรือสแกนมา",
+            "หรืออัปโหลดภาพเอกสารอ้างอิงที่แบนราบ — หน้าเดียวกัน ถ่ายตรง ๆ หรือสแกนมา",
             type=["jpg", "jpeg", "png", "webp"],
             key=f"ref_upload_{st.session_state.uploader_key}",
         )
@@ -405,6 +455,7 @@ with col_btn3:
         st.session_state.reference_img = None
         st.session_state.result = None
         st.session_state.step = 0
+        st.session_state.sample_choice = list(SAMPLE_OPTIONS.keys())[0]
         st.session_state.uploader_key += 1
         st.rerun()
 

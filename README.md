@@ -226,12 +226,21 @@ streamlit run app.py
 
 ## ชุดข้อมูลทดสอบ (Test Dataset)
 
-ในโฟลเดอร์ `tests/sample_images/` ได้จัดเตรียมภาพเอกสารตัวอย่างที่มีสภาพแวดล้อมและความยากแตกต่างกันเพื่อการทดสอบ:
-1. `test1.webp`: ภาพเอกสารบนระนาบที่มีมุมเอียงเล็กน้อยถึงปานกลาง
-2. `test2.webp`: ภาพเอกสารที่มีมุมมองเฉียงองศาสูง ทดสอบความทนทานของ Perspective Rectification
+ในโฟลเดอร์ `tests/sample_images/` ได้จัดเตรียมชุดภาพเอกสารตัวอย่างที่มีสภาพแวดล้อมและความยากแตกต่างกันอย่างครอบคลุม เพื่อทดสอบความทนทานของอัลกอริทึมและการจัดการกรณีขอบเขต (Edge Cases) ตามเกณฑ์ Rubric ของวิชา CP461:
 
-> **TODO (ก่อนส่งงาน):** ถ่ายภาพ edge case ด้วยมือถือเองเพิ่ม — แสงเงาทับขอบ, พื้นหลังรก,
-> มุมกระดาษถูกมือบัง, กระดาษสีกลืนกับโต๊ะ — rubric ให้ 1.0 pt กับการ demo edge case ด้วยภาพของตัวเอง
+| ไฟล์ | หมวดหมู่ | สภาพแวดล้อม / ความท้าทาย (Edge Case) | พฤติกรรมและการประมวลผล |
+|---|---|---|---|
+| `test1.webp` | Standard | เอกสาร A4 แนวนอน (Horizontal Sheet) บนระนาบโต๊ะ | **โหมด Auto:** ตรวจจับ 4 มุมสำเร็จ ปรับสัดส่วนเป็น A4 แนวนอน (800×566 px) |
+| `test2.webp` | Standard | เอกสารมุมเฉียงองศาสูง (High Angle Perspective) | **โหมด Auto:** ตรวจจับ 4 มุมสำเร็จ ดัดเป็น A4 แนวตั้ง (566×800 px) |
+| `ref1_flat_reference.jpg` | Reference Pair | ภาพเอกสารอ้างอิงทางเทคนิค A4 วางแบนราบสมบูรณ์ | **โหมด Reference:** ใช้เป็น Ground Truth / Reference Plane สำหรับจับคู่ Keypoints |
+| `ref1_skewed_photo.jpg` | Reference Pair | ภาพถ่ายเอียงของเอกสารเดียวกับ `ref1` บนโต๊ะไม้ | **โหมด Reference:** จับคู่กับ `ref1_flat` ด้วย SIFT ได้ Inliers > 75% และ Homography ดัดกลับตรง |
+| `edge1_extreme_perspective.jpg` | Edge Case | มุมมองเอียงรุนแรงมาก (> 50°) อัตราส่วนบิดเบี้ยวสูง | **Edge Handling:** ทดสอบการบิดเบี้ยวระดับสูง และระบบ Quad Validation |
+| `edge2_heavy_shadow.jpg` | Edge Case | มีเงามืดทอดยาวพาดผ่านขอบกระดาษและข้อความ | **Edge Handling:** ทดสอบ Adaptive Canny Threshold ท่ามกลางแสงที่ไม่สม่ำเสมอ |
+| `edge3_cluttered_background.jpg` | Edge Case | พื้นหลังรก มีปากกา โน้ต สมุด และลายไม้รอบกระดาษ | **Edge Handling:** ทดสอบ Contour Scoring System ในการเลือกเฉพาะตัวกระดาษ |
+| `edge4_corner_occluded.jpg` | Edge Case | มุมกระดาษถูกมือ/วัตถุบดบัง (Corner Occlusion) | **Edge Handling:** ทดสอบ Fallback Mechanism และการรายงาน Failure ที่ชัดเจน |
+| `edge5_low_contrast.jpg` | Edge Case | กระดาษสีสว่างบนพื้นผิวโต๊ะสีใกล้เคียงกัน (Low Contrast) | **Edge Handling:** ทดสอบความทนทานเมื่อ Gradient ของขอบกระดาษต่ำ |
+
+> **หมายเหตุสำหรับการสาธิต:** ในหน้าเว็บแอปพลิเคชัน (Streamlit UI) มีเมนูเลือกชุดภาพตัวอย่างเหล่านี้ให้ทดสอบได้ทันทีใน Section 1 โดยไม่ต้องอัปโหลดไฟล์เองทีละรูป ช่วยให้การนำเสนอและทดสอบทำได้อย่างสะดวกรวดเร็ว
 
 
 
