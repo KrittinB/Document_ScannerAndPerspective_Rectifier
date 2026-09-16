@@ -32,6 +32,14 @@ from src.utils import (
     draw_inlier_outlier,
     numpy_to_bytes_png,
 )
+from src.enhancement import (
+    apply_filter,
+    FILTER_MODES,
+    FILTER_ORIGINAL,
+    FILTER_MAGIC,
+    FILTER_BW,
+    FILTER_GRAY,
+)
 
 # ─────────────────────────────────────────────
 # Page Config
@@ -212,6 +220,8 @@ def _init_state():
         "result": None,
         "step": 0,  # 0=upload, 1=detect/match, 2=estimate, 3=done
         "uploader_key": 0,
+        "current_enhanced_img": None,
+        "current_filter_name": "original",
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -389,10 +399,14 @@ with col_btn2:
         and result_state.get("warped") is not None
     )
     if download_ready:
+        dl_img = st.session_state.get("current_enhanced_img")
+        if dl_img is None:
+            dl_img = result_state["warped"]
+        filter_tag = st.session_state.get("current_filter_name", "a4")
         st.download_button(
             "Download A4",
-            data=numpy_to_bytes_png(result_state["warped"]),
-            file_name="scanned_document.png",
+            data=numpy_to_bytes_png(dl_img),
+            file_name=f"scanned_document_{filter_tag}.png",
             mime="image/png",
             use_container_width=True,
         )
@@ -406,6 +420,8 @@ with col_btn3:
         st.session_state.result = None
         st.session_state.step = 0
         st.session_state.uploader_key += 1
+        st.session_state.current_enhanced_img = None
+        st.session_state.current_filter_name = "original"
         st.rerun()
 
 render_stepper(st.session_state.step, STEPS_BY_MODE[mode])
@@ -587,6 +603,39 @@ else:
     st.markdown(f"{est_badge} &nbsp; {method_badge} &nbsp; {orient_badge}", unsafe_allow_html=True)
     st.markdown("<div style='margin-bottom: 0.8rem;'></div>", unsafe_allow_html=True)
 
+    # ── Document Enhancement & Smart Filters ──
+    with st.container(border=True):
+        f_col_select, f_col_tune = st.columns([2.8, 1.2], vertical_alignment="center")
+        with f_col_select:
+            selected_filter = st.radio(
+                "✨ Document Filter (ปรับปรุงคุณภาพและลบเงา):",
+                FILTER_MODES,
+                index=0,
+                horizontal=True,
+                help=(
+                    "Original Color: ภาพสีต้นฉบับคมชัดเต็มพิกเซล\n"
+                    "Magic Color: ลบเงาด้วย Morphological Division + ปรับสีสดใสด้วย CLAHE ใน LAB Space\n"
+                    "Clean B&W: เอกสารขาว-ดำคมกริบ พื้นหลังขาวบริสุทธิ์แบบเครื่องสแกน\n"
+                    "Grayscale Scan: เฉดสีเทา ปรับสมดุลแสงสม่ำเสมอทั่วทั้งแผ่น"
+                ),
+            )
+        with f_col_tune:
+            with st.popover("⚙️ ปรับแต่งฟิลเตอร์ละเอียด"):
+                f_bright = st.slider("ความสว่าง (Brightness)", -50, 50, 0, 5)
+                f_contrast = st.slider("คอนทราสต์ (Contrast)", 0.5, 2.0, 1.05, 0.05)
+                f_bw_c = st.slider("ความไวขาวดำ (B&W Sensitivity)", 3, 31, 11, 2)
+                show_compare = st.checkbox("เปรียบเทียบ ก่อน/หลัง แต่งภาพ", value=False)
+
+    enhanced_warped = apply_filter(
+        result["warped"],
+        selected_filter,
+        brightness=f_bright,
+        contrast=f_contrast,
+        bw_threshold_c=f_bw_c,
+    )
+    st.session_state["current_enhanced_img"] = enhanced_warped
+    st.session_state["current_filter_name"] = selected_filter.split()[0].lower()
+
     res_col1, res_col2, res_col3 = st.columns(3)
 
     with res_col1:
@@ -605,11 +654,26 @@ else:
             st.markdown('<p class="img-caption">ตรวจจับกรอบและ 4 มุมเอกสาร (TL/TR/BR/BL)</p>', unsafe_allow_html=True)
 
     with res_col3:
-        st.image(numpy_bgr_to_pil(result["warped"]), caption="Final Result (A4 Corrected)", use_container_width=True)
-        out_h, out_w = result["warped"].shape[:2]
+        out_h, out_w = enhanced_warped.shape[:2]
+        if show_compare and selected_filter != FILTER_ORIGINAL:
+            tab_enhanced, tab_raw = st.tabs(["✨ ปรับแต่งแล้ว (Enhanced)", "📷 ก่อนปรับ (Raw Warped)"])
+            with tab_enhanced:
+                st.image(numpy_bgr_to_pil(enhanced_warped), caption=f"Final Result ({selected_filter})", use_container_width=True)
+            with tab_raw:
+                st.image(numpy_bgr_to_pil(result["warped"]), caption="Raw Warped (Original)", use_container_width=True)
+        else:
+            st.image(numpy_bgr_to_pil(enhanced_warped), caption=f"Final Result ({selected_filter})", use_container_width=True)
+
         st.markdown(
-            f'<p class="img-caption">ผลลัพธ์ A4 มองตรง ({out_w}×{out_h} px) — warp จากภาพต้นฉบับความละเอียดเต็ม</p>',
+            f'<p class="img-caption">ผลลัพธ์ A4 ({out_w}×{out_h} px) — {selected_filter}</p>',
             unsafe_allow_html=True,
+        )
+        st.download_button(
+            f"📥 Download ({selected_filter.split()[0]})",
+            data=numpy_to_bytes_png(enhanced_warped),
+            file_name=f"scanned_document_{st.session_state['current_filter_name']}.png",
+            mime="image/png",
+            use_container_width=True,
         )
 
     # ── Metrics ──
@@ -768,3 +832,30 @@ if result is not None and result.get("success"):
                 st.caption(
                     f"ขนาดผลลัพธ์: {out_w} × {out_h} px (สัดส่วน A4 1 : 1.414) · วิธีคำนวณ: {method_desc}"
                 )
+
+            with st.container(border=True):
+                st.markdown("#### [Post-Processing] Document Enhancement & Filters")
+                if selected_filter == FILTER_MAGIC:
+                    st.markdown(
+                        "**Magic Color Mode (Auto-Enhance & Shadow Removal):**\n"
+                        "- **Shadow Removal:** ประมาณระนาบแสงพื้นหลังด้วย Morphological Dilation/Closing (Kernel 35×35) ร่วมกับ Median Blur แล้วทำการ Division Normalization ($I_{norm} = I / B \\times 255$) เพื่อลบเงามือถือและปรับแสงให้สม่ำเสมอ\n"
+                        "- **LAB Contrast Enhancement:** แปลงเข้าสู่ระบบสี LAB แล้วประยุกต์ใช้ CLAHE บน L-Channel (Luminance) โดยเฉพาะ เพื่อเร่งคอนทราสต์โดยไม่เพี้ยนสี\n"
+                        "- **Unsharp Masking:** เพิ่มความคมชัดของลายเส้นตัวอักษรด้วย Gaussian Blur Weighted Difference"
+                    )
+                elif selected_filter == FILTER_BW:
+                    st.markdown(
+                        "**Clean B&W Mode (Document Scanner Binarization):**\n"
+                        "- **Pre-Binarization Illumination Flattening:** เกลี่ยแสงพื้นหลังกระดาษให้เรียบเท่ากันทั่วทั้งหน้า เพื่อป้องกันไม่ให้บริเวณเงามืดกลายเป็นปื้นดำ\n"
+                        "- **Adaptive Gaussian Thresholding:** คำนวณค่า Threshold แบบ Local สำหรับแต่ละพิกเซลโดยอิงเกาส์เซียนรอบจุด\n"
+                        "- **Denoising:** กรองสัญญาณรบกวนและเกล็ดหมึก (Salt & Pepper Noise) ด้วย Median Filter (3×3)"
+                    )
+                elif selected_filter == FILTER_GRAY:
+                    st.markdown(
+                        "**Grayscale Scan Mode:**\n"
+                        "- แปลงเป็นเฉดสีเทา ลบเงามืดทั่วทั้งแผ่น และขยายช่วงไดนามิก (Contrast Stretching) ด้วย CLAHE เหมาะกับเอกสารลายมือหรือเอกสารที่มีภาพประกอบ"
+                    )
+                else:
+                    st.markdown(
+                        "**Original Color Mode:**\n"
+                        "- แสดงผลลัพธ์ภาพสีดั้งเดิมที่ได้จากการ Warp Perspective ระดับ Full Resolution โดยตรงจากภาพต้นฉบับ"
+                    )
