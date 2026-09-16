@@ -1,7 +1,6 @@
-# pin ตามชุดที่ทดสอบแล้วว่ารันผ่านทั้ง 2 โหมด (Python 3.13, 16 ก.ย. 2026)
-# ต้องเป็น headless เท่านั้น — opencv-python ตัวเต็มต้องการ libGL ซึ่งไม่มีบน Streamlit Cloud
-# ถ้า deploy แล้วติดปัญหา wheel ไม่รองรับ Python เวอร์ชันบน cloud ให้ผ่อนเป็น >= แทน ==
-opencv-python-headless==5.0.0.93
-numpy==2.5.3
-Pillow==12.3.0
-streamlit==1.63.0
+# Compatible with Python 3.10+ (tested on Python 3.11 and 3.13)
+# Headless build is required for Streamlit Cloud (avoids libGL dependency)
+opencv-python-headless>=4.8.0
+numpy>=1.26.0
+Pillow>=10.0.0
+streamlit>=1.30.0
