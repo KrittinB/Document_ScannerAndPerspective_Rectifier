@@ -2,26 +2,32 @@
 app.py — Smart Document Scanner
 Streamlit Web App สำหรับ CP461 Group Project
 
-Pipeline:
-  Upload → Preprocess → Detect → Features → Homography → A4 Output
+มี 2 โหมดที่ใช้คนละวิธีหา Homography และบอกผู้ใช้ตรง ๆ ว่ากำลังใช้วิธีไหน:
+
+  Auto (ภาพเดียว)     Upload → Preprocess → Canny → Contour → 4 มุม
+                      → getPerspectiveTransform → A4
+                      สกัด SIFT/ORB keypoints ให้ดูด้วย แต่ไม่ได้เอาไปประมาณ H
+
+  Reference (2 ภาพ)   Upload ภาพถ่าย + ภาพเอกสารอ้างอิงที่แบนราบ
+                      → SIFT/ORB → BFMatcher/FLANN → Lowe's ratio test
+                      → RANSAC + findHomography → warpPerspective → A4
+                      โหมดนี้ H มาจาก feature matching จริง
 """
 
-import io
 import streamlit as st
 import numpy as np
 import cv2
-from PIL import Image
 
 from src.preprocessing import preprocess
 from src.detection import detect_document
-from src.features import extract_and_match
-from src.geometry import full_pipeline, get_a4_dimensions
+from src.features import extract_features, extract_and_match
+from src.geometry import rectify_from_corners, rectify_from_reference
 from src.utils import (
-    pil_to_numpy_bgr,
     numpy_bgr_to_pil,
     numpy_gray_to_pil,
     bytes_to_numpy_bgr,
     draw_corners,
+    draw_keypoints,
     draw_matches_visualization,
     draw_inlier_outlier,
     numpy_to_bytes_png,
@@ -160,6 +166,7 @@ st.markdown(
     .badge-green { background: #d1fae5; color: #065f46; }
     .badge-blue  { background: #dbeafe; color: #1e40af; }
     .badge-purple{ background: #ede9fe; color: #5b21b6; }
+    .badge-amber { background: #fef3c7; color: #92400e; }
 
     /* Upload area */
     [data-testid="stFileUploader"] {
@@ -194,16 +201,22 @@ st.markdown(
 # ─────────────────────────────────────────────
 # Session State
 # ─────────────────────────────────────────────
+MODE_AUTO = "Auto — ภาพเดียว (Contour)"
+MODE_REF = "Reference — 2 ภาพ (SIFT + RANSAC)"
+
+
 def _init_state():
     defaults = {
         "uploaded_img": None,
+        "reference_img": None,
         "result": None,
-        "step": 0,  # 0=upload, 1=detect, 2=feature, 3=done
+        "step": 0,  # 0=upload, 1=detect/match, 2=estimate, 3=done
         "uploader_key": 0,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
+
 
 _init_state()
 
@@ -211,11 +224,15 @@ _init_state()
 # ─────────────────────────────────────────────
 # Stepper HTML
 # ─────────────────────────────────────────────
-STEPS = ["Upload", "Detect", "Match", "Result"]
+STEPS_BY_MODE = {
+    MODE_AUTO: ["Upload", "Detect", "Rectify", "Result"],
+    MODE_REF: ["Upload", "Match", "RANSAC", "Result"],
+}
 
-def render_stepper(current: int):
+
+def render_stepper(current: int, steps: list):
     html = '<div class="stepper-container">'
-    for i, label in enumerate(STEPS):
+    for i, label in enumerate(steps):
         if i < current:
             cls = "step done"
         elif i == current:
@@ -223,7 +240,7 @@ def render_stepper(current: int):
         else:
             cls = "step"
         html += f'<div class="{cls}">{label}</div>'
-        if i < len(STEPS) - 1:
+        if i < len(steps) - 1:
             sep_cls = "step-sep done" if i < current else "step-sep"
             html += f'<div class="{sep_cls}"></div>'
     html += "</div>"
@@ -250,22 +267,29 @@ with st.sidebar:
     st.markdown("### About Project")
     st.markdown(
         """
-        **CP461 Computer Vision Project**  
+        **CP461 Computer Vision Project**
         Document Scanner & Perspective Rectifier
 
-        **Pipeline Architecture:**
+        **โหมด Auto (ภาพเดียว)**
         1. Preprocessing (Resize, Grayscale, Gaussian Blur)
-        2. Edge Detection (Canny)
+        2. Edge Detection (Canny + Morphological Closing)
         3. Contour & 4-Corner Localization
-        4. Feature Extraction (SIFT / ORB)
-        5. Feature Matching (BFMatcher / FLANN)
-        6. Lowe's Ratio Test Filtering
-        7. Robust Estimation (RANSAC + Homography)
-        8. Perspective Warping to Standard A4
+        4. `getPerspectiveTransform` → Warp เป็น A4
+
+        **โหมด Reference (2 ภาพ)**
+        1. Preprocessing ทั้งภาพถ่ายและภาพอ้างอิง
+        2. Feature Extraction (SIFT / ORB)
+        3. Feature Matching (BFMatcher / FLANN)
+        4. Lowe's Ratio Test Filtering
+        5. RANSAC + `findHomography`
+        6. Perspective Warping ด้วย H จาก RANSAC → A4
+
+        ---
+        โหมด Auto ใช้ contour หามุม จึง**ไม่ได้**ใช้ feature matching
+        ประมาณ Homography — ถ้าต้องการเส้นทาง SIFT + RANSAC เต็มรูปแบบ
+        ให้ใช้โหมด Reference
         """
     )
-
-render_stepper(st.session_state.step)
 
 # ─────────────────────────────────────────────
 # Section 1: Upload & Settings
@@ -274,65 +298,19 @@ st.markdown('<div class="section-title">Section 1: Upload & Settings</div>', uns
 
 col_upload, col_settings = st.columns([1.1, 0.9], gap="large")
 
-with col_upload:
-    st.markdown('<div class="subsection-title">Upload Document Image</div>', unsafe_allow_html=True)
-    uploaded_file = st.file_uploader(
-        "วาง หรือ คลิกเพื่อเลือกภาพถ่ายเอกสาร (JPG, PNG, WEBP)",
-        type=["jpg", "jpeg", "png", "webp"],
-        key=f"file_upload_{st.session_state.uploader_key}",
-    )
-
-    if uploaded_file is not None:
-        file_bytes = uploaded_file.read()
-        img_bgr = bytes_to_numpy_bgr(file_bytes)
-        if img_bgr is None:
-            st.error("ไม่สามารถอ่านไฟล์ภาพได้ กรุณาลองใหม่อีกครั้ง")
-            st.stop()
-
-        st.session_state.uploaded_img = img_bgr
-        if st.session_state.step == 0:
-            st.session_state.step = 1
-
-    # Action Buttons
-    col_btn1, col_btn2, col_btn3 = st.columns([1.8, 1.5, 1.2])
-
-    with col_btn1:
-        run_btn = st.button(
-            "Run Scan Pipeline",
-            type="primary",
-            disabled=(st.session_state.uploaded_img is None),
-            use_container_width=True,
-        )
-
-    with col_btn2:
-        download_ready = (
-            st.session_state.result is not None
-            and st.session_state.result.get("success")
-            and st.session_state.result.get("warped") is not None
-        )
-        if download_ready:
-            png_bytes = numpy_to_bytes_png(st.session_state.result["warped"])
-            st.download_button(
-                "Download A4",
-                data=png_bytes,
-                file_name="scanned_document.png",
-                mime="image/png",
-                use_container_width=True,
-            )
-        else:
-            st.button("Download A4", disabled=True, use_container_width=True)
-
-    with col_btn3:
-        if st.button("Reset", use_container_width=True):
-            st.session_state.uploaded_img = None
-            st.session_state.result = None
-            st.session_state.step = 0
-            st.session_state.uploader_key += 1
-            st.rerun()
-
 with col_settings:
     st.markdown('<div class="subsection-title">Pipeline Settings</div>', unsafe_allow_html=True)
     with st.container(border=True):
+        mode = st.radio(
+            "Rectification Mode",
+            [MODE_AUTO, MODE_REF],
+            help=(
+                "Auto: หามุมกระดาษจาก contour แล้วดัดมุมมองตรง ๆ ใช้ภาพเดียว\n\n"
+                "Reference: จับคู่ feature ระหว่างภาพถ่ายกับภาพเอกสารอ้างอิง "
+                "แล้วประมาณ Homography ด้วย RANSAC — เป็นเส้นทางที่ใช้ SIFT/ORB จริง"
+            ),
+        )
+
         s_col1, s_col2 = st.columns(2)
         with s_col1:
             feature_method = st.selectbox(
@@ -344,94 +322,182 @@ with col_settings:
             matcher_method = st.selectbox(
                 "Feature Matcher",
                 ["BFMatcher", "FLANN"],
-                help="BFMatcher แม่นยำ, FLANN เร็วกว่าสำหรับ dataset ขนาดใหญ่",
+                disabled=(mode == MODE_AUTO),
+                help="BFMatcher แม่นยำ, FLANN เร็วกว่าสำหรับ dataset ขนาดใหญ่ (ใช้เฉพาะโหมด Reference)",
             )
 
         ratio_threshold = st.slider(
             "Lowe's Ratio Threshold", 0.50, 0.95, 0.75, 0.05,
-            help="ค่ามาตรฐาน 0.70 - 0.75 สำหรับกรอง ambiguous matches",
+            disabled=(mode == MODE_AUTO),
+            help="ค่ามาตรฐาน 0.70 - 0.75 สำหรับกรอง ambiguous matches (ใช้เฉพาะโหมด Reference)",
         )
         a4_height = st.slider(
-            "Output Resolution (height px)", 600, 1600, 800, 100,
-            help="ความสูงของภาพ A4 ผลลัพธ์ (ความกว้างจะปรับตามสัดส่วน A4)",
+            "Output Resolution (ด้านยาว, px)", 600, 1600, 800, 100,
+            help="ด้านยาวของภาพ A4 ผลลัพธ์ (อีกด้านคำนวณจากสัดส่วน 1:1.414 และสลับอัตโนมัติถ้าเอกสารเป็นแนวนอน)",
         )
+
+with col_upload:
+    st.markdown('<div class="subsection-title">Upload Document Image</div>', unsafe_allow_html=True)
+    uploaded_file = st.file_uploader(
+        "ภาพถ่ายเอกสารที่เอียง (JPG, PNG, WEBP)",
+        type=["jpg", "jpeg", "png", "webp"],
+        key=f"file_upload_{st.session_state.uploader_key}",
+    )
+
+    if uploaded_file is not None:
+        img_bgr = bytes_to_numpy_bgr(uploaded_file.read())
+        if img_bgr is None:
+            st.error("ไม่สามารถอ่านไฟล์ภาพได้ กรุณาลองไฟล์อื่น")
+            st.stop()
+        st.session_state.uploaded_img = img_bgr
+        if st.session_state.step == 0:
+            st.session_state.step = 1
+
+    if mode == MODE_REF:
+        ref_file = st.file_uploader(
+            "ภาพเอกสารอ้างอิงที่แบนราบ — หน้าเดียวกัน ถ่ายตรง ๆ หรือสแกนมา",
+            type=["jpg", "jpeg", "png", "webp"],
+            key=f"ref_upload_{st.session_state.uploader_key}",
+        )
+        if ref_file is not None:
+            ref_bgr = bytes_to_numpy_bgr(ref_file.read())
+            if ref_bgr is None:
+                st.error("ไม่สามารถอ่านไฟล์ภาพอ้างอิงได้ กรุณาลองไฟล์อื่น")
+                st.stop()
+            st.session_state.reference_img = ref_bgr
+
+needs_ref = (mode == MODE_REF) and st.session_state.reference_img is None
+if needs_ref and st.session_state.uploaded_img is not None:
+    st.info("โหมด Reference ต้องใช้ 2 ภาพ — กรุณาอัปโหลดภาพเอกสารอ้างอิงด้วย")
+
+# ปุ่มวางเป็นแถวเต็มความกว้างใต้ทั้งสองคอลัมน์ เพื่อให้ข้อความบนปุ่มไม่โดนตัดบนจอแคบ
+col_btn1, col_btn2, col_btn3, _ = st.columns([1.4, 1.2, 1.0, 2.4])
+
+with col_btn1:
+    run_btn = st.button(
+        "Run Scan Pipeline",
+        type="primary",
+        disabled=(st.session_state.uploaded_img is None or needs_ref),
+        use_container_width=True,
+    )
+
+with col_btn2:
+    result_state = st.session_state.result
+    download_ready = (
+        result_state is not None
+        and result_state.get("success")
+        and result_state.get("warped") is not None
+    )
+    if download_ready:
+        st.download_button(
+            "Download A4",
+            data=numpy_to_bytes_png(result_state["warped"]),
+            file_name="scanned_document.png",
+            mime="image/png",
+            use_container_width=True,
+        )
+    else:
+        st.button("Download A4", disabled=True, use_container_width=True)
+
+with col_btn3:
+    if st.button("Reset", use_container_width=True):
+        st.session_state.uploaded_img = None
+        st.session_state.reference_img = None
+        st.session_state.result = None
+        st.session_state.step = 0
+        st.session_state.uploader_key += 1
+        st.rerun()
+
+render_stepper(st.session_state.step, STEPS_BY_MODE[mode])
 
 
 # ─────────────────────────────────────────────
 # Pipeline Execution Logic
 # ─────────────────────────────────────────────
 if run_btn and st.session_state.uploaded_img is not None:
-    img = st.session_state.uploaded_img
+    photo = st.session_state.uploaded_img
+
+    # เก็บค่า setting ที่ใช้ตอนรันไว้ในผลลัพธ์ เพื่อให้คำอธิบายใต้ภาพตรงกับรอบที่รันจริง
+    settings = {
+        "mode": mode,
+        "feature_method": feature_method,
+        "matcher_method": matcher_method,
+        "ratio": ratio_threshold,
+        "a4_height": a4_height,
+    }
 
     with st.spinner("กำลังประมวลผล pipeline..."):
         try:
-            # Step 1: Preprocess
-            st.session_state.step = 1
-            prep = preprocess(img)
-            img_resized = prep["resized"]
-            img_gray = prep["gray"]
-            img_blur = prep["blurred"]
+            prep = preprocess(photo)
+            resized, gray, blurred, scale = prep["resized"], prep["gray"], prep["blurred"], prep["scale"]
 
-            # Step 2: Detect document corners
-            st.session_state.step = 2
-            det = detect_document(img_blur, img_resized.shape[:2])
-            corners = det["corners"]
-            edges = det["edges"]
-
-            if not det["success"] or corners is None:
-                st.session_state.result = {
-                    "success": False,
-                    "message": det["message"],
-                    "img_resized": img_resized,
-                    "edges": edges,
-                }
+            # ── โหมด Auto: contour → 4 มุม → warp ────────────────────────
+            if mode == MODE_AUTO:
                 st.session_state.step = 1
+                det = detect_document(blurred, resized.shape[:2])
+
+                if not det["success"]:
+                    st.session_state.result = {
+                        "success": False,
+                        "message": det["message"],
+                        "img_resized": resized,
+                        "edges": det["edges"],
+                        "corners": det.get("corners"),
+                        "settings": settings,
+                    }
+                    st.session_state.step = 1
+                else:
+                    st.session_state.step = 2
+                    geo = rectify_from_corners(photo, det["corners"], scale, a4_height)
+
+                    # สกัด keypoints ไว้แสดงให้เห็นขั้นตอน feature extraction
+                    # (โหมดนี้ไม่ได้เอาไปประมาณ H — เขียนกำกับไว้ใต้ภาพแล้ว)
+                    kp, _ = extract_features(gray, feature_method)
+
+                    st.session_state.result = {
+                        **geo,
+                        "img_resized": resized,
+                        "edges": det["edges"],
+                        "corners": det["corners"],
+                        "detect_method": det["method"],
+                        "detect_message": det["message"],
+                        "keypoints": kp,
+                        "settings": settings,
+                    }
+                    st.session_state.step = 3 if geo["success"] else 2
+
+            # ── โหมด Reference: SIFT → match → ratio → RANSAC → warp ─────
             else:
-                # Step 3: Feature extraction + matching
-                from src.geometry import corners_to_homography, warp_perspective as warp_tmp
+                reference = st.session_state.reference_img
+                ref_prep = preprocess(reference)
 
-                H_tmp, _, sz_tmp = corners_to_homography(corners, a4_height)
-                warped_tmp = warp_tmp(img_resized, H_tmp, sz_tmp)
-                gray_warped = cv2.cvtColor(warped_tmp, cv2.COLOR_BGR2GRAY)
-
+                st.session_state.step = 1
                 feat = extract_and_match(
-                    img_gray,
-                    gray_warped,
+                    gray, ref_prep["gray"],
                     method=feature_method,
                     matcher=matcher_method,
                     ratio=ratio_threshold,
                 )
 
-                # Step 4: Geometry / RANSAC / Homography
-                st.session_state.step = 3
-                geo = full_pipeline(
-                    img_resized,
-                    corners,
-                    feature_result=feat,
-                    a4_base=a4_height,
+                st.session_state.step = 2
+                geo = rectify_from_reference(
+                    photo, scale, ref_prep["resized"], feat, a4_height
                 )
 
                 st.session_state.result = {
-                    "success": geo["success"],
-                    "message": geo["message"],
-                    "img_resized": img_resized,
-                    "edges": edges,
-                    "corners": corners,
-                    "warped": geo["warped"],
-                    "H": geo["H"],
-                    "mask": geo["mask"],
-                    "n_inliers": geo["n_inliers"],
-                    "used_ransac": geo["used_ransac"],
+                    **geo,
+                    "img_resized": resized,
+                    "ref_resized": ref_prep["resized"],
                     "feat": feat,
-                    "gray_warped": gray_warped,
-                    "warped_tmp": warped_tmp,
+                    "settings": settings,
                 }
-                st.session_state.step = 3 if geo["success"] else 2
+                st.session_state.step = 3 if geo["success"] else 1
 
         except Exception as e:
             st.session_state.result = {
                 "success": False,
-                "message": f"เกิดข้อผิดพลาด: {str(e)}",
+                "message": f"เกิดข้อผิดพลาด: {e}",
+                "settings": settings,
             }
 
     st.rerun()
@@ -446,178 +512,259 @@ result = st.session_state.result
 
 if result is None:
     if st.session_state.uploaded_img is not None:
-        st.info("ภาพเอกสารถูกอัปโหลดแล้ว — กรุณากดปุ่ม 'Run Scan Pipeline' ใน Section 1 เพื่อเริ่มประมวลผล")
-        preview_pil = numpy_bgr_to_pil(st.session_state.uploaded_img)
-        col_prev, _ = st.columns([1, 2])
+        st.info("อัปโหลดภาพแล้ว — กดปุ่ม 'Run Scan Pipeline' ใน Section 1 เพื่อเริ่มประมวลผล")
+        col_prev, col_prev2, _ = st.columns([1, 1, 1])
         with col_prev:
-            st.image(preview_pil, caption="ภาพต้นฉบับ (Preview ก่อนประมวลผล)", use_container_width=True)
+            st.image(
+                numpy_bgr_to_pil(st.session_state.uploaded_img),
+                caption="ภาพถ่ายเอกสาร (Preview)",
+                use_container_width=True,
+            )
+        if st.session_state.reference_img is not None:
+            with col_prev2:
+                st.image(
+                    numpy_bgr_to_pil(st.session_state.reference_img),
+                    caption="ภาพอ้างอิง (Preview)",
+                    use_container_width=True,
+                )
     else:
         st.info("กรุณาอัปโหลดภาพถ่ายเอกสารใน Section 1 ด้านบนเพื่อเริ่มต้นใช้งาน")
 
-elif result is not None:
-    if not result["success"]:
-        st.error(f"{result['message']}")
-        if result.get("img_resized") is not None:
-            st.image(
-                numpy_bgr_to_pil(result["img_resized"]),
-                caption="ภาพต้นฉบับ",
-                use_container_width=True,
-            )
-        if result.get("edges") is not None:
-            st.image(
-                numpy_gray_to_pil(result["edges"]),
-                caption="Edge Map",
-                use_container_width=True,
-            )
-    else:
-        # Status Badges
-        ransac_badge = (
-            '<span class="badge badge-green">RANSAC from features</span>'
-            if result.get("used_ransac")
-            else '<span class="badge badge-blue">Corner-based homography</span>'
+elif not result.get("success"):
+    # ── กรณีล้มเหลว: บอกเหตุผลตรง ๆ พร้อมภาพประกอบให้ผู้ใช้เห็นว่าระบบเห็นอะไร ──
+    st.error(result.get("message", "ประมวลผลไม่สำเร็จ"))
+
+    # เก็บเฉพาะภาพที่มีจริงในรอบนี้ แล้วค่อยแบ่งคอลัมน์ตามจำนวน — กันคอลัมน์ว่าง
+    panels = []
+    if result.get("img_resized") is not None:
+        panels.append((numpy_bgr_to_pil(result["img_resized"]), "ภาพถ่ายต้นฉบับ"))
+    if result.get("ref_resized") is not None:
+        panels.append((numpy_bgr_to_pil(result["ref_resized"]), "ภาพอ้างอิงที่ใช้จับคู่"))
+    if result.get("edges") is not None:
+        panels.append((numpy_gray_to_pil(result["edges"]), "Canny Edge Map — สิ่งที่ระบบมองเห็น"))
+    if result.get("corners") is not None and result.get("img_resized") is not None:
+        panels.append((
+            numpy_bgr_to_pil(draw_corners(result["img_resized"], result["corners"], color=(0, 165, 255))),
+            "กรอบที่ระบบเดาได้ (ยังไม่ผ่านเกณฑ์)",
+        ))
+
+    if panels:
+        for col, (img, cap) in zip(st.columns(len(panels)), panels):
+            with col:
+                st.image(img, caption=cap, use_container_width=True)
+
+    if result.get("settings", {}).get("mode") == MODE_REF:
+        st.caption(
+            "ลองใช้ภาพอ้างอิงที่เป็นเอกสารหน้าเดียวกันจริง ๆ ถ่ายให้คมชัดและเห็นเต็มหน้า "
+            "หรือเพิ่มค่า Lowe's Ratio Threshold เพื่อให้ผ่าน ratio test มากขึ้น"
         )
-        method_badge = f'<span class="badge badge-purple">{feature_method} + {matcher_method}</span>'
-        st.markdown(f"{ransac_badge} &nbsp; {method_badge}", unsafe_allow_html=True)
-        st.markdown("<div style='margin-bottom: 0.8rem;'></div>", unsafe_allow_html=True)
+    else:
+        st.caption(
+            "ลองถ่ายใหม่ให้กระดาษตัดกับพื้นหลังชัดขึ้น หลีกเลี่ยงเงาทับขอบกระดาษ "
+            "หรือเปลี่ยนไปใช้โหมด Reference ที่ไม่ต้องพึ่งขอบกระดาษ"
+        )
 
-        # 3-Column Main Results: Original | 4 Corners Detection | Final Result A4 Corrected
-        res_col1, res_col2, res_col3 = st.columns(3)
+else:
+    settings = result.get("settings", {})
+    run_mode = settings.get("mode", MODE_AUTO)
+    is_ref = run_mode == MODE_REF
 
-        with res_col1:
-            orig_pil = numpy_bgr_to_pil(result["img_resized"])
-            st.image(orig_pil, caption="Original Image", use_container_width=True)
-            st.markdown('<p class="img-caption">ภาพถ่ายต้นฉบับ (Resized)</p>', unsafe_allow_html=True)
+    # ── Status Badges ──
+    if result.get("used_ransac"):
+        est_badge = '<span class="badge badge-green">Homography จาก RANSAC + feature matching</span>'
+    else:
+        est_badge = '<span class="badge badge-amber">Homography จาก 4 มุม (contour) — ไม่ได้ใช้ feature</span>'
+    method_badge = (
+        f'<span class="badge badge-purple">{settings.get("feature_method")} '
+        f'+ {settings.get("matcher_method")}</span>'
+        if is_ref else
+        f'<span class="badge badge-purple">{settings.get("feature_method")} keypoints</span>'
+    )
+    orient_badge = (
+        f'<span class="badge badge-blue">A4 '
+        f'{"แนวนอน" if result.get("landscape") else "แนวตั้ง"}</span>'
+    )
+    st.markdown(f"{est_badge} &nbsp; {method_badge} &nbsp; {orient_badge}", unsafe_allow_html=True)
+    st.markdown("<div style='margin-bottom: 0.8rem;'></div>", unsafe_allow_html=True)
 
-        with res_col2:
-            corners_img = draw_corners(result["img_resized"], result["corners"])
-            st.image(numpy_bgr_to_pil(corners_img), caption="4 Corners Detection", use_container_width=True)
+    res_col1, res_col2, res_col3 = st.columns(3)
+
+    with res_col1:
+        st.image(numpy_bgr_to_pil(result["img_resized"]), caption="Original Photo", use_container_width=True)
+        st.markdown('<p class="img-caption">ภาพถ่ายต้นฉบับ (แสดงแบบย่อ)</p>', unsafe_allow_html=True)
+
+    with res_col2:
+        if is_ref:
+            st.image(numpy_bgr_to_pil(result["ref_resized"]), caption="Reference Document", use_container_width=True)
+            st.markdown('<p class="img-caption">ภาพอ้างอิงที่ใช้เป็นเป้าหมายของ Homography</p>', unsafe_allow_html=True)
+        else:
+            st.image(
+                numpy_bgr_to_pil(draw_corners(result["img_resized"], result["corners"])),
+                caption="4 Corners Detection", use_container_width=True,
+            )
             st.markdown('<p class="img-caption">ตรวจจับกรอบและ 4 มุมเอกสาร (TL/TR/BR/BL)</p>', unsafe_allow_html=True)
 
-        with res_col3:
-            warped_pil = numpy_bgr_to_pil(result["warped"])
-            st.image(warped_pil, caption="Final Result (A4 Corrected)", use_container_width=True)
-            w, h = result["warped"].shape[1], result["warped"].shape[0]
-            st.markdown(f'<p class="img-caption">ผลลัพธ์ A4 มองตรง ({w}×{h} px)</p>', unsafe_allow_html=True)
+    with res_col3:
+        st.image(numpy_bgr_to_pil(result["warped"]), caption="Final Result (A4 Corrected)", use_container_width=True)
+        out_h, out_w = result["warped"].shape[:2]
+        st.markdown(
+            f'<p class="img-caption">ผลลัพธ์ A4 มองตรง ({out_w}×{out_h} px) — warp จากภาพต้นฉบับความละเอียดเต็ม</p>',
+            unsafe_allow_html=True,
+        )
 
-        # ── Pipeline Metrics & Confidence Row (ใต้ภาพผลลัพธ์) ──
-        st.markdown("<div style='margin-top: 1.2rem;'></div>", unsafe_allow_html=True)
+    # ── Metrics ──
+    st.markdown("<div style='margin-top: 1.2rem;'></div>", unsafe_allow_html=True)
+
+    def _metric(col, value, label):
+        with col:
+            st.markdown(
+                f'<div class="metric-card"><div class="value">{value}</div>'
+                f'<div class="label">{label}</div></div>',
+                unsafe_allow_html=True,
+            )
+
+    if is_ref:
         feat = result.get("feat", {})
-        n_kp1 = feat.get("n_keypoints_1", 0)
-        n_kp2 = feat.get("n_keypoints_2", 0)
         n_good = feat.get("n_good", 0)
         n_inliers = result.get("n_inliers", 0)
-        confidence = min(100, int(n_inliers / max(n_good, 1) * 100)) if n_good > 0 else 0
+        inlier_ratio = int(round(n_inliers / max(n_good, 1) * 100))
 
-        mc1, mc2, mc3, mc4, mc5 = st.columns(5)
-        with mc1:
-            st.markdown(
-                f'<div class="metric-card"><div class="value">{n_kp1}</div>'
-                f'<div class="label">Keypoints (src)</div></div>',
-                unsafe_allow_html=True,
-            )
-        with mc2:
-            st.markdown(
-                f'<div class="metric-card"><div class="value">{n_kp2}</div>'
-                f'<div class="label">Keypoints (dst)</div></div>',
-                unsafe_allow_html=True,
-            )
-        with mc3:
-            st.markdown(
-                f'<div class="metric-card"><div class="value">{n_good}</div>'
-                f'<div class="label">Good Matches</div></div>',
-                unsafe_allow_html=True,
-            )
-        with mc4:
-            st.markdown(
-                f'<div class="metric-card"><div class="value">{n_inliers}</div>'
-                f'<div class="label">RANSAC Inliers</div></div>',
-                unsafe_allow_html=True,
-            )
-        with mc5:
-            st.markdown(
-                f'<div class="metric-card"><div class="value">{confidence}%</div>'
-                f'<div class="label">Confidence</div></div>',
-                unsafe_allow_html=True,
-            )
+        cols = st.columns(5)
+        _metric(cols[0], feat.get("n_keypoints_1", 0), "Keypoints (ภาพถ่าย)")
+        _metric(cols[1], feat.get("n_keypoints_2", 0), "Keypoints (อ้างอิง)")
+        _metric(cols[2], n_good, "Good Matches (หลัง ratio test)")
+        _metric(cols[3], n_inliers, "RANSAC Inliers")
+        _metric(cols[4], f"{inlier_ratio}%", "Inlier Ratio")
 
-        st.progress(confidence / 100, text=f"Pipeline Confidence: {confidence}%")
+        st.progress(
+            min(inlier_ratio, 100) / 100,
+            text=f"Inlier Ratio: {n_inliers} จาก {n_good} คู่ที่ผ่าน ratio test ({inlier_ratio}%)",
+        )
+    else:
+        out_h, out_w = result["warped"].shape[:2]
+        detect_label = {
+            "contour": "Contour (4 จุด)",
+            "minarearect": "minAreaRect",
+        }.get(result.get("detect_method"), result.get("detect_method", "-"))
+
+        cols = st.columns(4)
+        _metric(cols[0], len(result.get("keypoints", [])), f'{settings.get("feature_method")} Keypoints')
+        _metric(cols[1], detect_label, "วิธีหามุม")
+        _metric(cols[2], "แนวนอน" if result.get("landscape") else "แนวตั้ง", "ทิศทางเอกสาร")
+        _metric(cols[3], f"{out_w}×{out_h}", "ขนาดผลลัพธ์ (px)")
+
+        st.caption(
+            "โหมด Auto ไม่มีค่า inlier เพราะไม่ได้ใช้ RANSAC ประมาณ Homography — "
+            "ถ้าต้องการตัวเลข inlier จาก RANSAC จริง ให้สลับไปโหมด Reference"
+        )
+
+    st.success(result.get("message", ""))
 
 
 # ─────────────────────────────────────────────
-# Section 3: Technical Pipeline Details (Collapsible)
+# Section 3: Technical Pipeline Details
 # ─────────────────────────────────────────────
 if result is not None and result.get("success"):
+    settings = result.get("settings", {})
+    is_ref = settings.get("mode") == MODE_REF
+
     st.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
     with st.expander("Technical Details", expanded=False):
-        # 2-Column Technical Layout
         tech_col1, tech_col2 = st.columns(2, gap="medium")
 
         with tech_col1:
-            # [Preprocessing] Canny Edge Map
-            with st.container(border=True):
-                st.markdown("#### [Preprocessing] Canny Edge Map")
-                edges_pil = numpy_gray_to_pil(result["edges"])
-                st.image(edges_pil, caption="Canny Edge Map", use_container_width=True)
-                st.caption("การตรวจจับขอบเขตเอกสารด้วย Canny Edge Detection หลังผ่าน Gaussian Blur 5×5 เพื่อลดสัญญาณรบกวน (noise)")
+            if is_ref:
+                with st.container(border=True):
+                    st.markdown("#### [Feature Matching] Matches After Lowe's Ratio Test")
+                    feat = result.get("feat", {})
+                    good_matches = feat.get("good_matches", [])
+                    kp1, kp2 = feat.get("kp1", []), feat.get("kp2", [])
 
-            # [Feature Matching] Matches After Lowe's Ratio Test
-            with st.container(border=True):
-                st.markdown("#### [Feature Matching] Matches After Lowe's Ratio Test")
-                good_matches = feat.get("good_matches", [])
-                kp1 = feat.get("kp1", [])
-                kp2 = feat.get("kp2", [])
-
-                if len(good_matches) >= 1 and len(kp1) > 0 and len(kp2) > 0:
-                    match_vis = draw_matches_visualization(
-                        result["img_resized"], kp1,
-                        result["warped_tmp"], kp2,
-                        good_matches,
+                    if good_matches and kp1 and kp2:
+                        match_vis = draw_matches_visualization(
+                            result["img_resized"], kp1, result["ref_resized"], kp2, good_matches,
+                        )
+                        st.image(numpy_bgr_to_pil(match_vis), caption="Feature Matching Visualization",
+                                 use_container_width=True)
+                    else:
+                        st.warning("ไม่มีคู่จุดที่ผ่าน ratio test ให้แสดง")
+                    st.caption(
+                        f'จับคู่จุดเด่นด้วย {settings.get("matcher_method")} (knnMatch k=2) '
+                        f'แล้วกรองจุดกำกวมด้วย Lowe\'s Ratio Test ที่ threshold '
+                        f'{settings.get("ratio", 0):.2f} เหลือ {len(good_matches)} คู่'
                     )
-                    st.image(numpy_bgr_to_pil(match_vis), caption="Feature Matching Visualization", use_container_width=True)
-                else:
-                    st.image(numpy_bgr_to_pil(result["img_resized"]), caption="Feature Matching (no matches)", use_container_width=True)
-                st.caption(f"จับคู่จุดเด่นด้วย {matcher_method} และกรองจุดกำกวมด้วย Lowe's Ratio Test (Threshold = {ratio_threshold:.2f}) ได้ {len(good_matches)} good matches")
+            else:
+                with st.container(border=True):
+                    st.markdown("#### [Preprocessing] Canny Edge Map")
+                    st.image(numpy_gray_to_pil(result["edges"]), caption="Canny Edge Map",
+                             use_container_width=True)
+                    st.caption(
+                        "ตรวจจับขอบด้วย Canny แบบ adaptive threshold (อิงค่า median) "
+                        "หลัง Gaussian Blur 5×5 แล้วปิดรอยขาดของขอบด้วย Morphological Closing"
+                    )
+
+                with st.container(border=True):
+                    st.markdown(f'#### [Feature Extraction] {settings.get("feature_method")} Keypoints')
+                    kp = result.get("keypoints", [])
+                    st.image(
+                        numpy_bgr_to_pil(draw_keypoints(result["img_resized"], kp)),
+                        caption=f"{len(kp)} keypoints", use_container_width=True,
+                    )
+                    st.caption(
+                        f'สกัด keypoints ด้วย {settings.get("feature_method")} ได้ {len(kp)} จุด '
+                        "(ขนาดวงกลม = scale, เส้นในวงกลม = orientation) — "
+                        "**โหมด Auto ไม่ได้นำ keypoints เหล่านี้ไปประมาณ Homography** "
+                        "แสดงไว้เพื่อให้เห็นขั้นตอน feature extraction เท่านั้น"
+                    )
 
         with tech_col2:
-            # [RANSAC] Inliers / Outliers Visualization
-            with st.container(border=True):
-                st.markdown("#### [RANSAC] Inliers / Outliers Visualization")
-                inlier_img = draw_inlier_outlier(
-                    result["img_resized"],
-                    kp1,
-                    good_matches,
-                    result.get("mask"),
-                )
-                st.image(numpy_bgr_to_pil(inlier_img), caption="Inlier (Green) vs Outlier (Red)", use_container_width=True)
-                st.caption("RANSAC ทำหน้าที่กำจัดจุดคู่ที่สอดคล้องผิดพลาด (Outliers สีแดง) และคงไว้เฉพาะจุดคู่ที่สอดคล้องกับระนาบจริง (Inliers สีเขียว)")
+            if is_ref:
+                with st.container(border=True):
+                    st.markdown("#### [RANSAC] Inliers / Outliers")
+                    feat = result.get("feat", {})
+                    inlier_img = draw_inlier_outlier(
+                        result["img_resized"], feat.get("kp1", []),
+                        feat.get("good_matches", []), result.get("mask"),
+                    )
+                    if inlier_img is not None:
+                        st.image(numpy_bgr_to_pil(inlier_img), caption="Inlier (เขียว) vs Outlier (แดง)",
+                                 use_container_width=True)
+                        st.caption(
+                            "RANSAC สุ่มเลือกชุดจุด 4 คู่ซ้ำ ๆ เพื่อหา Homography ที่มีจุดสอดคล้องมากที่สุด "
+                            "จุดเขียวคือคู่ที่เข้ากับระนาบเดียวกัน (inlier) จุดแดงคือคู่ที่ถูกตัดทิ้ง (outlier)"
+                        )
+                    else:
+                        st.info("ไม่มี inlier mask สำหรับรอบนี้")
 
-            # [Homography] Transformation Information
             with st.container(border=True):
                 st.markdown("#### [Homography] Transformation Information")
                 H = result.get("H")
                 if H is not None:
                     st.markdown("**Homography Matrix H (3×3):**")
-                    st.latex(r"""
-                    H = \begin{bmatrix}
-                    %.4f & %.4f & %.4f \\
-                    %.4f & %.4f & %.4f \\
-                    %.4f & %.4f & %.4f
-                    \end{bmatrix}
-                    """ % (H[0,0], H[0,1], H[0,2], H[1,0], H[1,1], H[1,2], H[2,0], H[2,1], H[2,2]))
+                    st.latex(
+                        r"H = \begin{bmatrix}"
+                        r"%.4f & %.4f & %.4f \\ %.4f & %.4f & %.4f \\ %.4f & %.4f & %.4f"
+                        r"\end{bmatrix}"
+                        % (H[0, 0], H[0, 1], H[0, 2],
+                           H[1, 0], H[1, 1], H[1, 2],
+                           H[2, 0], H[2, 1], H[2, 2])
+                    )
 
                 corners = result.get("corners")
                 if corners is not None and len(corners) == 4:
-                    st.markdown("**Detected Corner Coordinates (Source):**")
-                    c_data = {
+                    st.markdown("**Detected Corner Coordinates (พิกัดในภาพย่อ):**")
+                    st.table({
                         "Corner": ["Top-Left (TL)", "Top-Right (TR)", "Bottom-Right (BR)", "Bottom-Left (BL)"],
-                        "X (px)": [f"{corners[0][0]:.1f}", f"{corners[1][0]:.1f}", f"{corners[2][0]:.1f}", f"{corners[3][0]:.1f}"],
-                        "Y (px)": [f"{corners[0][1]:.1f}", f"{corners[1][1]:.1f}", f"{corners[2][1]:.1f}", f"{corners[3][1]:.1f}"],
-                    }
-                    st.table(c_data)
+                        "X (px)": [f"{c[0]:.1f}" for c in corners],
+                        "Y (px)": [f"{c[1]:.1f}" for c in corners],
+                    })
 
-                w_out = result["warped"].shape[1]
-                h_out = result["warped"].shape[0]
-                method_desc = "RANSAC Robust Estimation" if result.get("used_ransac") else "Direct Corner Perspective Transform"
-                st.caption(f"ขนาดภาพผลลัพธ์: {w_out} × {h_out} px (สัดส่วน A4 1 : 1.414) | วิธีการคำนวณ: {method_desc}")
-
-
+                out_h, out_w = result["warped"].shape[:2]
+                method_desc = (
+                    "RANSAC Robust Estimation จาก feature matches"
+                    if result.get("used_ransac")
+                    else "Direct 4-Point Perspective Transform จาก contour"
+                )
+                st.caption(
+                    f"ขนาดผลลัพธ์: {out_w} × {out_h} px (สัดส่วน A4 1 : 1.414) · วิธีคำนวณ: {method_desc}"
+                )
