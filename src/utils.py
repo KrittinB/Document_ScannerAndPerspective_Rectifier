@@ -102,35 +102,46 @@ def draw_matches_visualization(
     return out
 
 
+def draw_keypoints(image: np.ndarray, keypoints: list, max_draw: int = 400) -> np.ndarray:
+    """
+    วาด keypoints ที่ detector หาได้ (ขนาดวงกลม = scale, เส้น = orientation)
+    ใช้ในโหมด Auto ที่มีการสกัด feature จริงแต่ไม่ได้เอาไปประมาณ homography
+    """
+    return cv2.drawKeypoints(
+        image, list(keypoints)[:max_draw], None,
+        color=(0, 200, 255),
+        flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS,
+    )
+
+
 def draw_inlier_outlier(
     image: np.ndarray,
     keypoints: list,
     good_matches: list,
-    mask: np.ndarray | None,
+    mask: np.ndarray,
     max_draw: int = 200,
-) -> np.ndarray:
+) -> np.ndarray | None:
     """
-    วาด keypoints ที่ผ่าน ratio test บนภาพ
+    วาดจุดที่ผ่าน ratio test บนภาพ โดยแยกด้วยผลของ RANSAC
       - inlier (mask=1): สีเขียว
       - outlier (mask=0): สีแดง
-    ถ้า mask เป็น None → วาดทุก good_matches เป็นสีเขียว
+
+    ต้องมี mask ที่มาจาก RANSAC จริงและยาวเท่ากับ good_matches เท่านั้น
+    ถ้าไม่มี (เช่นโหมด Auto ที่ไม่ได้ใช้ feature ประมาณ H) จะคืน None
+    เพื่อให้ผู้เรียกซ่อนภาพนี้ไป แทนที่จะวาดจุดแดงมั่ว ๆ จาก mask ปลอม
     """
+    if mask is None:
+        return None
+    mask_flat = np.asarray(mask).flatten()
+    if len(mask_flat) != len(good_matches):
+        return None
+
     out = image.copy()
-
-    if mask is None or len(mask) == 0:
-        # วาดทุก good_matches เป็นสีเขียว
-        for i, m in enumerate(good_matches[:max_draw]):
-            if m.queryIdx < len(keypoints):
-                pt = tuple(map(int, keypoints[m.queryIdx].pt))
-                cv2.circle(out, pt, 5, (0, 255, 0), -1)
-        return out
-
-    mask_flat = mask.flatten()
     for i, m in enumerate(good_matches[:max_draw]):
         if m.queryIdx >= len(keypoints):
             continue
         pt = tuple(map(int, keypoints[m.queryIdx].pt))
-        if i < len(mask_flat) and mask_flat[i]:
+        if mask_flat[i]:
             cv2.circle(out, pt, 5, (0, 255, 0), -1)   # inlier: เขียว
         else:
             cv2.circle(out, pt, 5, (0, 0, 255), -1)   # outlier: แดง
