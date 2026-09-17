@@ -270,64 +270,20 @@ def _is_usable(H):
 
 ---
 
-### F-13 · ระบบ Document Enhancement & Smart Filters (Post-Processing Pipeline)
+### F-10 · ชุดภาพทดสอบ Edge Cases และ Reference Pair พร้อม UI Quick Selector
 
-**ที่มาและความสำคัญ** 
-การทำ Perspective Rectification แปลงภาพให้ตรงเพียงอย่างเดียว ยังไม่เพียงพอสำหรับการเป็น "แอปพลิเคชัน Document Scanner ระดับมืออาชีพ" เพราะภาพถ่ายเอกสารจริงจากกล้องมือถือมักจะติดปัญหา:
-1. **เงามือถือหรือเงาตัวผู้ใช้ตกกระทบ (Shadow Casting):** ส่งผลให้กระดาษมืดบางส่วน แสงไม่สม่ำเสมอทั่วทั้งแผ่น
-2. **ตัวอักษรไม่คมชัดและกระดาษอมเทา/เหลือง:** ขาดความคมชัดแบบเครื่องสแกนสำนักงาน
-3. **การขาดโหมดขาว-ดำ (Binarization):** เอกสารทางการต้องการภาพขาว-ดำสะอาดตาเพื่อลดขนาดไฟล์และนำไปเข้า OCR ได้ง่าย
+**สถานการณ์เดิม** ใน `tests/sample_images/` มีเพียง 2 ภาพขนาดเล็ก (474×316) ที่โหลดมาจากอินเทอร์เน็ต และไม่มีคู่ภาพสำหรับทดสอบโหมด Reference (SIFT + RANSAC) ทำให้ไม่สามารถเดโมการรับมือ Edge Cases (แสงเงา, มุมบัง, พื้นหลังรก, สีกลืน ฯลฯ) ซึ่ง rubric ให้คะแนนถึง 1.0 pt
 
-**การแก้ปัญหาและอัลกอริทึมที่นำมาใช้ (`src/enhancement.py`)**
-
-เราได้พัฒนาโมดูลประมวลผลภาพขั้นสูง `src/enhancement.py` มีฟังก์ชันหลัก 4 โหมด:
-
-1. **`remove_shadows()` — Morphological Division Normalization:**
-   - ใช้หลักการประมาณระนาบแสงพื้นหลัง (Illumination Map: $B$) ด้วย **Morphological Dilation** ขนาดใหญ่ (Kernel $35 \times 35$) ร่วมกับ **Median Blur** เพื่อเกลี่ยตัวอักษรออก ให้เหลือเฉพาะค่าความสว่างของผิวกระดาษ
-   - นำภาพต้นฉบับมาหารด้วยระนาบแสง:
-     $$I_{norm}(x, y) = \min\left(255, \frac{I(x, y)}{B(x, y)} \times 255\right)$$
-   - ผลลัพธ์: เงามืดที่พาดผ่านกระดาษจะถูกเกลี่ยให้สว่างเท่ากันทั่วทั้งแผ่น ผิวกระดาษขาวสม่ำเสมอโดยตัวหนังสือไม่เลือนหาย
-
-2. **`enhance_magic_color()` — Magic Color Mode (Auto-Enhance):**
-   - ขั้นแรกกำจัดเงาด้วย `remove_shadows()`
-   - แปลงภาพเข้าสู่ระบบสี **CIE LAB** เพื่อแยกช่องความสว่าง (L: Luminance) ออกจากช่องสี (A, B)
-   - ปรับความคมชัดเฉพาะจุดด้วย **CLAHE (Contrast Limited Adaptive Histogram Equalization)** บนช่อง L เพื่อป้องกันไม่ให้เกิด Noise หรือสีเพี้ยน
-   - ทำ **Unsharp Masking** ด้วย Gaussian Blur Weighted Subtraction ($1.35 \times I - 0.35 \times G$) เพื่อเร่งความคมชัดของขอบตัวอักษร
-
-3. **`enhance_clean_bw()` — Clean B&W (Scanner / Binary Mode):**
-   - แปลงเป็น Grayscale และทำ Illumination Normalization ก่อน เพื่อป้องกันไม่ให้บริเวณที่เคยมีเงามืดกลายเป็นปื้นสีดำ
-   - แปลงเป็นไบนารีด้วย **Adaptive Gaussian Thresholding** ($C = 11$, Block Size $21 \times 21$) คำนวณขีดแบ่งท้องถิ่นตามการถ่วงน้ำหนักเกาส์เซียน
-   - กรองสัญญาณรบกวนขนาดเล็กและเกล็ดหมึก (Salt & Pepper noise) ด้วย Median Filter ($3 \times 3$)
-   - ผลลัพธ์: ข้อความสีดำคมกริบบนพื้นกระดาษขาวบริสุทธิ์แบบเอกสารสแกนจากเครื่องถ่ายเอกสาร
-
-4. **`enhance_grayscale()` — Grayscale Scan Mode:**
-   - แปลงเป็น Grayscale, เกลี่ยแสงพื้นหลัง, และปรับ Dynamic Range ด้วย CLAHE เหมาะกับเอกสารลายมือหรือเอกสารที่มีรูปถ่ายขาวดำ
-
-**การเชื่อมต่อกับหน้าเว็บ (`app.py`)**
-- เพิ่มกล่องตัวเลือก **"✨ Document Filter (ปรับปรุงคุณภาพและลบเงา)"** ใน Section 2 เหนือภาพผลลัพธ์
-- มี Popover **"⚙️ ปรับแต่งฟิลเตอร์ละเอียด"** ให้ผู้ใช้ปรับ Brightness, Contrast, B&W Threshold Sensitivity ได้แบบ Interactive
-- มีโหมด **"เปรียบเทียบ ก่อน/หลัง แต่งภาพ (Before vs After Tabs)"** แสดงแท็บภาพ Raw Warped เทียบกับ Enhanced ให้เห็นความแตกต่างของการลบเงาชัดเจน
-- ปุ่ม **Download A4** ทั้งใน Section 1 และปุ่มตรง Section 2 จะดาวน์โหลดไฟล์ PNG ตามฟิลเตอร์ที่เลือกโดยอัตโนมัติ (เช่น `scanned_document_magic.png`, `scanned_document_clean.png`)
-- เพิ่มคำอธิบายอัลกอริทึมอย่างละเอียดใน Section 3 (Technical Details) เพื่อใช้อ้างอิงตอนตรวจงานและพรีเซนต์
-
----
-
-### F-14 · แก้ไข Encoding และ Compatibility ของ `requirements.txt` บน Windows (Python 3.11+)
-
-**อาการเดิม** 
-1. รัน `pip install -r requirements.txt` บน Windows แล้วแครชทันทีด้วย `UnicodeDecodeError: 'charmap' codec can't decode byte 0x81` เพราะ pip บน Windows ใช้ code page `cp1252` ถอดรหัสคอมเมนต์ภาษาไทย UTF-8 ไม่ผ่าน
-2. การล็อก `numpy==2.5.3` แบบเจาะจง ทำให้เครื่องที่ใช้ **Python 3.11** รันไม่ผ่าน เพราะ numpy 2.5.x ต้องการ Python `>=3.12`
-
-**แก้เป็น**
-- ลบคอมเมนต์ภาษาไทยออก เปลี่ยนเป็นภาษาอังกฤษล้วน ป้องกัน UnicodeDecodeError
-- ผ่อนปรนเงื่อนไขเวอร์ชันเป็น `>=` ตามที่ CHANGELOG เดิมเคยแนะนำไว้:
-  ```text
-  opencv-python-headless>=4.8.0
-  numpy>=1.26.0
-  Pillow>=10.0.0
-  streamlit>=1.30.0
-  ```
-  ทำให้โปรเจกต์สามารถติดตั้งและรันได้บนทั้ง **Python 3.10, 3.11, 3.12, 3.13** และระบบ Linux Cloud
+**สิ่งที่ทำเพิ่ม**
+1. สร้างสคริปต์ `scripts/generate_edge_case_samples.py` ผลิตภาพเอกสารจำลองความละเอียดสูง (1920×1280 และ 1440×1920) บรรจุใน `tests/sample_images/` ครบทุกเคส:
+   - `ref1_flat_reference.jpg` + `ref1_skewed_photo.jpg`: คู่ภาพเอกสารเดียวกัน สำหรับทดสอบโหมด Reference ได้ inliers 171/217 คู่ (79%)
+   - `edge1_extreme_perspective.jpg`: มุมมองเอียงรุนแรง (> 50°)
+   - `edge2_heavy_shadow.jpg`: แสงเงาทอดยาวพาดผ่านขอบเอกสาร
+   - `edge3_cluttered_background.jpg`: พื้นหลังโต๊ะรก มีปากกา โน้ต และลายไม้
+   - `edge4_corner_occluded.jpg`: มุมกระดาษถูกบดบังด้วยวัตถุ/นิ้วมือ
+   - `edge5_low_contrast.jpg`: กระดาษสีสว่างบนโต๊ะสีกลืนกัน
+2. เพิ่ม **Quick Sample Selector** ใน `app.py`: ผู้ใช้และกรรมการสามารถเลือกภาพตัวอย่างจากดรอปดาวน์เพื่อทดสอบระบบได้ทันทีโดยไม่ต้องค้นหาและอัปโหลดไฟล์เอง
+3. สร้างสคริปต์ตรวจสอบความถูกต้อง `scripts/verify_samples.py` และอัปเดตตารางชุดข้อมูลใน `README.md`
 
 ---
 
@@ -401,8 +357,8 @@ def _is_usable(H):
 | ID | เรื่อง | หมายเหตุ |
 |---|---|---|
 | **F-09** | โหมดให้ผู้ใช้ลากมุมเอง | spec ระบุเป็น fallback ทำด้วย `st.slider` 4 คู่ให้ปรับพิกัดมุมแล้ว re-warp ได้ · **เดโมในวิดีโอสวย** |
-| **F-10** | ภาพ edge case ที่ถ่ายเอง | ตอนนี้มีแค่ 2 ไฟล์ขนาด 474×316 จากเว็บ ต้องถ่ายเองด้วยมือถือ: เอียงมาก / แสงเงาทับ / พื้นหลังรก / มุมถูกมือบัง / กระดาษสีกลืนกับโต๊ะ · **rubric ให้ 1.0 pt** |
-| **F-11** | pytest ครบทุกโมดูล | เพิ่ม `tests/test_enhancement.py` แล้ว (เทสต์ผ่าน 100%) เหลือเพิ่มเทสต์สำหรับ `order_corners`, `get_a4_dimensions` |
+| ~~**F-10**~~ | **ภาพ edge case + reference pair** | **[เสร็จแล้ว]** สร้างชุดภาพความละเอียดสูง 7 ไฟล์ใน `tests/sample_images/` ครบทุก edge case และ reference pair พร้อม UI Quick Selector ใน `app.py` |
+| **F-11** | pytest | โฟลเดอร์ `tests/` มีแต่รูป ไม่มีไฟล์เทสต์ เริ่มจาก `order_corners` คืนลำดับถูก, `get_a4_dimensions` ได้ 1.414 ±0.01, warp ภาพสี่เหลี่ยมที่รู้คำตอบ |
 | **F-12** | notebook สำรอง | spec ระบุ `notebook/pipeline_demo.ipynb` · ใช้เป็นแผนสำรองถ้าแอปที่ deploy ล่มวันนำเสนอ |
 | ~~**F-13**~~ | ~~โหมดภาพขาวดำแบบสแกน~~ | **[เสร็จแล้ว]** พัฒนาโมดูล `src/enhancement.py` ครบ 4 โหมด (Original, Magic Color, Clean B&W, Grayscale) พร้อม UI ปรับแต่งใน `app.py` |
 | **F-19** | หัวข้อ Deployment ใน README | สารบัญลิงก์ไปหาแต่ยังไม่มีหัวข้อ ลิงก์จึงเสีย |
