@@ -20,7 +20,7 @@ import numpy as np
 import cv2
 
 from src.preprocessing import preprocess
-from src.detection import detect_document
+from src.detection import detect_document, order_corners, validate_quad
 from src.features import extract_features, extract_and_match
 from src.geometry import rectify_from_corners, rectify_from_reference
 from src.utils import (
@@ -477,6 +477,121 @@ render_stepper(st.session_state.step, STEPS_BY_MODE[mode])
 
 
 # ─────────────────────────────────────────────
+# F-09: Manual Corner Adjustment Fallback UI
+# ─────────────────────────────────────────────
+def render_manual_corner_adjustment(
+    result_dict: dict,
+    photo: np.ndarray,
+    scale: float,
+    a4_height: int,
+    settings: dict,
+):
+    """
+    F-09: Fallback UI สำหรับให้ผู้ใช้ปรับพิกัด 4 มุมด้วยตนเองผ่าน st.slider
+    รองรับทั้งกรณีตรวจจับอัตโนมัติไม่ผ่าน (เปิดกางออกทันที) หรือกรณีต้องการปรับแต่งละเอียด
+    """
+    img_resized = result_dict.get("img_resized")
+    if img_resized is None or photo is None:
+        return
+
+    h, w = img_resized.shape[:2]
+    init_corners = result_dict.get("corners")
+    if init_corners is None or len(init_corners) != 4:
+        init_corners = np.array([
+            [w * 0.1, h * 0.1],
+            [w * 0.9, h * 0.1],
+            [w * 0.9, h * 0.9],
+            [w * 0.1, h * 0.9],
+        ], dtype=np.float32)
+    else:
+        init_corners = np.asarray(init_corners, dtype=np.float32).reshape(4, 2)
+
+    is_failed = not result_dict.get("success", False)
+    u_key = st.session_state.get("uploader_key", 0)
+
+    with st.expander(
+        "🎯 โหมดปรับแต่งพิกัดมุม 4 จุดด้วยตนเอง (Manual Corner Adjustment Fallback)",
+        expanded=is_failed,
+    ):
+        st.markdown(
+            "หากการตรวจจับอัตโนมัติคลาดเคลื่อนเนื่องจากขอบกระดาษไม่ชัด มีเงาทับ หรือมุมถูกบดบัง "
+            "ท่านสามารถปรับเลื่อนพิกัด 4 มุม (TL, TR, BR, BL) ด้วยตนเอง แล้วกด Re-warp ด้านล่าง"
+        )
+
+        col_tl, col_tr, col_br, col_bl = st.columns(4)
+
+        with col_tl:
+            st.markdown("**1. Top-Left (TL)**")
+            tl_x = st.slider("TL - X", 0, w, int(round(float(np.clip(init_corners[0][0], 0, w)))), step=2, key=f"man_tl_x_{u_key}")
+            tl_y = st.slider("TL - Y", 0, h, int(round(float(np.clip(init_corners[0][1], 0, h)))), step=2, key=f"man_tl_y_{u_key}")
+
+        with col_tr:
+            st.markdown("**2. Top-Right (TR)**")
+            tr_x = st.slider("TR - X", 0, w, int(round(float(np.clip(init_corners[1][0], 0, w)))), step=2, key=f"man_tr_x_{u_key}")
+            tr_y = st.slider("TR - Y", 0, h, int(round(float(np.clip(init_corners[1][1], 0, h)))), step=2, key=f"man_tr_y_{u_key}")
+
+        with col_br:
+            st.markdown("**3. Bottom-Right (BR)**")
+            br_x = st.slider("BR - X", 0, w, int(round(float(np.clip(init_corners[2][0], 0, w)))), step=2, key=f"man_br_x_{u_key}")
+            br_y = st.slider("BR - Y", 0, h, int(round(float(np.clip(init_corners[2][1], 0, h)))), step=2, key=f"man_br_y_{u_key}")
+
+        with col_bl:
+            st.markdown("**4. Bottom-Left (BL)**")
+            bl_x = st.slider("BL - X", 0, w, int(round(float(np.clip(init_corners[3][0], 0, w)))), step=2, key=f"man_bl_x_{u_key}")
+            bl_y = st.slider("BL - Y", 0, h, int(round(float(np.clip(init_corners[3][1], 0, h)))), step=2, key=f"man_bl_y_{u_key}")
+
+        custom_pts = np.array([
+            [tl_x, tl_y],
+            [tr_x, tr_y],
+            [br_x, br_y],
+            [bl_x, bl_y],
+        ], dtype=np.float32)
+
+        prev_col1, prev_col2 = st.columns([1.5, 1])
+        with prev_col1:
+            preview_canvas = draw_corners(img_resized.copy(), custom_pts, color=(0, 255, 0), thickness=2)
+            labels = ["TL", "TR", "BR", "BL"]
+            for pt, lbl in zip(custom_pts, labels):
+                cv2.putText(
+                    preview_canvas, lbl,
+                    (int(pt[0]) + 8, int(pt[1]) - 8),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2
+                )
+            st.image(numpy_bgr_to_pil(preview_canvas), caption="พรีวิวมุมที่กำลังปรับแต่ง (สีเขียว)", use_container_width=True)
+
+        with prev_col2:
+            st.markdown("##### ยืนยันการปรับมุม")
+            st.write(f"- ขนาดภาพพิกัด: {w} × {h} px")
+            st.write(f"- Scale ปัจจุบัน: {scale:.4f}")
+            st.write(f"- Output Height: {a4_height} px")
+
+            if st.button("🔄 คำนวณและ Warp ใหม่ (Re-warp from Custom Corners)", type="primary", use_container_width=True):
+                ordered = order_corners(custom_pts)
+                ok, reason = validate_quad(ordered, (h, w))
+                if not ok:
+                    st.error(f"ไม่สามารถคำนวณ Homography ได้: {reason}")
+                else:
+                    with st.spinner("กำลังคำนวณ Homography และ Warp ด้วยพิกัดที่กำหนด..."):
+                        geo = rectify_from_corners(photo, ordered, scale, a4_height)
+                        gray = cv2.cvtColor(img_resized, cv2.COLOR_BGR2GRAY)
+                        kp, _ = extract_features(gray, settings.get("feature_method", "SIFT"))
+                        st.session_state.result = {
+                            **geo,
+                            "img_resized": img_resized,
+                            "edges": result_dict.get("edges"),
+                            "corners": ordered,
+                            "detect_method": "manual",
+                            "detect_message": "ปรับแต่ง 4 มุมด้วยตนเอง (Manual Fallback)",
+                            "keypoints": kp,
+                            "scale": scale,
+                            "settings": settings,
+                        }
+                        st.session_state.step = 3
+                        st.rerun()
+
+
+
+# ─────────────────────────────────────────────
 # Pipeline Execution Logic
 # ─────────────────────────────────────────────
 if run_btn and st.session_state.uploaded_img is not None:
@@ -508,6 +623,7 @@ if run_btn and st.session_state.uploaded_img is not None:
                         "img_resized": resized,
                         "edges": det["edges"],
                         "corners": det.get("corners"),
+                        "scale": scale,
                         "settings": settings,
                     }
                     st.session_state.step = 1
@@ -527,6 +643,7 @@ if run_btn and st.session_state.uploaded_img is not None:
                         "detect_method": det["method"],
                         "detect_message": det["message"],
                         "keypoints": kp,
+                        "scale": scale,
                         "settings": settings,
                     }
                     st.session_state.step = 3 if geo["success"] else 2
@@ -554,6 +671,7 @@ if run_btn and st.session_state.uploaded_img is not None:
                     "img_resized": resized,
                     "ref_resized": ref_prep["resized"],
                     "feat": feat,
+                    "scale": scale,
                     "settings": settings,
                 }
                 st.session_state.step = 3 if geo["success"] else 1
@@ -626,8 +744,16 @@ elif not result.get("success"):
     else:
         st.caption(
             "ลองถ่ายใหม่ให้กระดาษตัดกับพื้นหลังชัดขึ้น หลีกเลี่ยงเงาทับขอบกระดาษ "
-            "หรือเปลี่ยนไปใช้โหมด Reference ที่ไม่ต้องพึ่งขอบกระดาษ"
+            "หรือใช้โหมดปรับแต่งพิกัดมุม 4 จุดด้านล่างนี้เพื่อกู้คืนภาพด้วยตนเอง"
         )
+        if st.session_state.uploaded_img is not None:
+            render_manual_corner_adjustment(
+                result,
+                st.session_state.uploaded_img,
+                result.get("scale", 1.0),
+                result.get("settings", {}).get("a4_height", 800),
+                result.get("settings", {}),
+            )
 
 else:
     settings = result.get("settings", {})
@@ -635,7 +761,9 @@ else:
     is_ref = run_mode == MODE_REF
 
     # ── Status Badges ──
-    if result.get("used_ransac"):
+    if result.get("detect_method") == "manual":
+        est_badge = '<span class="badge badge-purple">Homography จาก 4 มุมที่ปรับด้วยตนเอง (Manual Fallback)</span>'
+    elif result.get("used_ransac"):
         est_badge = '<span class="badge badge-green">Homography จาก RANSAC + feature matching</span>'
     else:
         est_badge = '<span class="badge badge-amber">Homography จาก 4 มุม (contour) — ไม่ได้ใช้ feature</span>'
@@ -758,6 +886,7 @@ else:
         detect_label = {
             "contour": "Contour (4 จุด)",
             "minarearect": "minAreaRect",
+            "manual": "Manual (ปรับเอง)",
         }.get(result.get("detect_method"), result.get("detect_method", "-"))
 
         cols = st.columns(4)
@@ -772,6 +901,15 @@ else:
         )
 
     st.success(result.get("message", ""))
+
+    if not is_ref and st.session_state.uploaded_img is not None:
+        render_manual_corner_adjustment(
+            result,
+            st.session_state.uploaded_img,
+            result.get("scale", 1.0),
+            settings.get("a4_height", 800),
+            settings,
+        )
 
 
 # ─────────────────────────────────────────────
@@ -873,11 +1011,12 @@ if result is not None and result.get("success"):
                     })
 
                 out_h, out_w = result["warped"].shape[:2]
-                method_desc = (
-                    "RANSAC Robust Estimation จาก feature matches"
-                    if result.get("used_ransac")
-                    else "Direct 4-Point Perspective Transform จาก contour"
-                )
+                if result.get("detect_method") == "manual":
+                    method_desc = "Manual 4-Point Perspective Transform จากการปรับมุมของผู้ใช้"
+                elif result.get("used_ransac"):
+                    method_desc = "RANSAC Robust Estimation จาก feature matches"
+                else:
+                    method_desc = "Direct 4-Point Perspective Transform จาก contour"
                 st.caption(
                     f"ขนาดผลลัพธ์: {out_w} × {out_h} px (สัดส่วน A4 1 : 1.414) · วิธีคำนวณ: {method_desc}"
                 )
