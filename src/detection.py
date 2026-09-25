@@ -149,13 +149,13 @@ def validate_quad(corners: np.ndarray, img_shape: tuple, min_area_ratio: float =
             if float(np.linalg.norm(pts[i] - pts[j])) < diag * 0.02:
                 return False, "มุมที่ตรวจได้ซ้ำหรือใกล้กันเกินไป จนคำนวณ perspective ไม่ได้"
 
-    area = abs(cv2.contourArea(pts))
-    if area < h * w * min_area_ratio:
-        return False, "กรอบที่ตรวจได้เล็กเกินกว่าจะเป็นเอกสาร"
-
     # ไม่นูน = มุมไขว้กัน (เช่น ลำดับจุดผิด หรือ 3 จุดเกือบอยู่บนเส้นตรงเดียวกัน)
     if not cv2.isContourConvex(pts.astype(np.int32)):
         return False, "กรอบที่ตรวจได้ไขว้กันเอง (ไม่เป็นรูปสี่เหลี่ยมนูน)"
+
+    area = abs(cv2.contourArea(pts))
+    if area < h * w * min_area_ratio:
+        return False, "กรอบที่ตรวจได้เล็กเกินกว่าจะเป็นเอกสาร"
 
     return True, ""
 

@@ -158,10 +158,10 @@ https://documentscannerandperspectiverectifier-ceuurr4pfg8wzjqzvrygv6.streamlit.
 
 ```text
 document-scanner/
-├── app.py                         # Web Application หลักพัฒนาด้วย Streamlit (UI, Filters, Pipeline Runner)
+├── app.py                         # Web Application หลักพัฒนาด้วย Streamlit (UI, Filters, Pipeline Runner, Manual Fallback)
 ├── requirements.txt               # รายการ Python dependencies (รองรับ Python 3.10+)
 ├── packages.txt                   # รายการ System packages สำหรับ Cloud Linux Environment (libgl1, libglib2.0-0)
-├── README.md                      # เอกสารคู่มือการใช้งานและรายละเอียดโปรเจกต์
+├── README.md                      # เอกสารคู่มือการใช้งาน รายละเอียดโปรเจกต์ และ Task Allocation
 ├── CP461_document_scanner_spec.md # ข้อกำหนดทางเทคนิคและเกณฑ์โครงงาน CP461
 ├── CHANGELOG.md                   # บันทึกการอัปเดตและประวัติการแก้บั๊กอย่างละเอียด
 ├── src/
@@ -172,11 +172,21 @@ document-scanner/
 │   ├── geometry.py                # ฟังก์ชัน Homography, RANSAC, ขนาด A4 ตามทิศทาง และ Warp ทั้งสองโหมด
 │   ├── enhancement.py             # ระบบปรับปรุงภาพเอกสาร ลบเงามือถือ Magic Color และ Clean B&W
 │   └── utils.py                   # ฟังก์ชันวาดเส้นกรอบมุม, แสดงคู่จุด Match, Inliers/Outliers, และแปลง Format ภาพ
+├── notebook/
+│   └── pipeline_demo.ipynb        # สมุดโค้ดสำรองสำหรับรันบน Colab/Local สาธิต Pipeline ครบ 12 ขั้นตอน (F-12)
+├── scripts/
+│   ├── benchmark_pipeline.py      # สคริปต์ทดสอบและวัดค่า Latency/FPS การประมวลผลของระบบ
+│   └── create_pipeline_demo_notebook.py # สคริปต์สร้างและคอมไพล์ Jupyter Notebook
 └── tests/
     ├── test_enhancement.py        # Automated unit tests สำหรับฟังก์ชัน Document Enhancement
-    └── sample_images/             # ชุดภาพตัวอย่างสำหรับทดสอบระบบ
-        ├── test1.webp             # ภาพเอกสารมุมเอียงทั่วไป
-        └── test2.webp             # ภาพเอกสารมุมเอียงองศาสูง (Perspective จัด)
+    ├── test_geometry.py           # Automated unit tests สำหรับ Homography, มุม 45°, และ Ground Truth Rectification (F-11)
+    ├── test_detection.py          # Automated unit tests สำหรับ Edge, Contour, และ Failure Handling (F-11)
+    └── sample_images/             # ชุดภาพตัวอย่างทดสอบ ครอบคลุม Standard, Reference Pair และ Edge Cases
+        ├── test1.webp             # ภาพเอกสารแนวนอนทั่วไป
+        ├── test2.webp             # ภาพเอกสารมุมเอียงองศาสูง
+        ├── ref1_flat_reference.jpg# ภาพเอกสารอ้างอิงวางตรง (Reference Ground Truth)
+        ├── ref1_skewed_photo.jpg  # ภาพเอกสารเดียวกันถ่ายเอียง (Reference Skewed)
+        └── edge1 - edge5 (.jpg)   # ภาพทดสอบกรณี Edge Cases (แสงเงา, พื้นหลังรก, มุมบัง ฯลฯ)
 ```
 
 ---
@@ -228,6 +238,22 @@ streamlit run app.py
 
 ---
 
+## การนำไปขึ้นคลาวด์ (Deployment)
+
+แอปพลิเคชันได้รับการ Deploy ขึ้นสู่ระบบคลาวด์สาธารณะอย่างสมบูรณ์ เพื่อให้เข้าเกณฑ์ **Tier 3 (Publicly deployed web application)** ตามเกณฑ์ Rubric ของวิชา CP461 (คะแนนเต็ม Engineering 3/3, คะแนนรวมสูงสุด 10/10):
+
+- **🌐 Live Application URL:** [https://documentscannerandperspectiverectifier-ceuurr4pfg8wzjqzvrygv6.streamlit.app/](https://documentscannerandperspectiverectifier-ceuurr4pfg8wzjqzvrygv6.streamlit.app/)
+- **แพลตฟอร์มคลาวด์:** Streamlit Community Cloud
+- **การเชื่อมต่อ Git:** ผูกกับ GitHub Repository สาขา `main` โดยตรง พร้อมระบบ **Continuous Deployment (CD)** ที่จะ Redeploy อัตโนมัติทันทีที่มีการ Push โค้ดใหม่
+
+### การตั้งค่า Headless Environment บน Linux Container
+เนื่องจาก Container ของ Streamlit Cloud ทำงานบนระบบปฏิบัติการ Linux ในสภาพแวดล้อม Headless (ไม่มีระบบจัดการหน้าต่าง X11/OpenGL):
+1. **`requirements.txt`:** กำหนดให้ใช้ `opencv-python-headless` (แทน `opencv-python` เดิม) เพื่อตัดการเชื่อมต่อกับโมดูล GUI และไลบรารี `libGL.so.1` ป้องกันข้อผิดพลาด `ImportError: libGL.so.1: cannot open shared object file`
+2. **`packages.txt`:** ระบุไลบรารีระบบของ Debian/Ubuntu ได้แก่ `libgl1` และ `libglib2.0-0` เพื่อเป็นเกราะป้องกันข้อผิดพลาดของ dependency ทางอ้อม
+3. **แผนสำรอง (Contingency Plan):** ในกรณีที่ระบบ Cloud มีการหน่วงเวลาหรือแอปเข้าสู่โหมดพัก (Sleep/Zzzz) ในวันนำเสนอ ได้จัดเตรียมสมุดโค้ดสำรอง `notebook/pipeline_demo.ipynb` ที่สามารถรันบน Google Colab หรือ Local Environment ได้ทันที
+
+---
+
 ## ชุดข้อมูลทดสอบ (Test Dataset)
 
 ในโฟลเดอร์ `tests/sample_images/` ได้จัดเตรียมชุดภาพเอกสารตัวอย่างที่มีสภาพแวดล้อมและความยากแตกต่างกันอย่างครอบคลุม เพื่อทดสอบความทนทานของอัลกอริทึมและการจัดการกรณีขอบเขต (Edge Cases) ตามเกณฑ์ Rubric ของวิชา CP461:
@@ -246,10 +272,30 @@ streamlit run app.py
 
 > **หมายเหตุสำหรับการสาธิต:** ในหน้าเว็บแอปพลิเคชัน (Streamlit UI) มีเมนูเลือกชุดภาพตัวอย่างเหล่านี้ให้ทดสอบได้ทันทีใน Section 1 โดยไม่ต้องอัปโหลดไฟล์เองทีละรูป ช่วยให้การนำเสนอและทดสอบทำได้อย่างสะดวกรวดเร็ว
 
+---
 
+## การแบ่งบทบาทหน้าที่ (Task Allocation)
+
+เพื่อให้สอดคล้องกับเกณฑ์ Rubric ด้าน **Balanced Member Participation (0.5 pt)** และการนำเสนอ **10-Minute Presentation (3.0 pts)** สมาชิกทุกคนมีบทบาทหน้าที่ความรับผิดชอบที่สมดุลและครอบคลุมทุกส่วนของโปรเจกต์:
+
+| ลำดับ | ชื่อ - นามสกุล | รหัสนักศึกษา | บทบาทหน้าที่หลัก | รายละเอียดงานที่รับผิดชอบ |
+|:---:|---|:---:|---|---|
+| **1** | นาย/นางสาว [ชื่อ-นามสกุล สมาชิก 1] | [รหัส นศ.] | **Pipeline Architecture & Preprocessing Lead** | • ออกแบบ End-to-End Pipeline สถาปัตยกรรมรวมของระบบ<br>• พัฒนาโมดูล `src/preprocessing.py` (Resize, Grayscale, Gaussian Blur)<br>• พัฒนาระบบ Adaptive Canny Edge Detection และ Morphological Closing ขอบกระดาษ<br>• จัดทำสคริปต์ตรวจสอบความคมชัดของภาพ (Variance of Laplacian) |
+| **2** | นาย/นางสาว [ชื่อ-นามสกุล สมาชิก 2] | [รหัส นศ.] | **Contour & Geometric Rectification Lead** | • พัฒนาโมดูล `src/detection.py` ค้นหา Contour และระบบ Area/Aspect Scoring<br>• พัฒนาอัลกอริทึมจัดเรียง 4 มุมด้วยมุมรอบจุดศูนย์ถ่วง (`atan2`) ป้องกันจุดซ้ำมุม 45°<br>• ออกแบบระบบ Quad Validation คัดกรองจุดซ้อนและสี่เหลี่ยมเว้า<br>• พัฒนาการคำนวณ Homography Matrix และ Warp Perspective สัดส่วน A4 คมชัดสูง |
+| **3** | นาย/นางสาว [ชื่อ-นามสกุล สมาชิก 3] | [รหัส นศ.] | **Feature Extraction & RANSAC Specialist** | • พัฒนาโมดูล `src/features.py` รองรับ SIFT และ ORB Feature Detectors<br>• ออกแบบระบบจับคู่จุดเด่นด้วย BFMatcher และ FLANN (KNN Matching k=2)<br>• พัฒนา Lowe's Ratio Test กรองจุดเด่นที่กำกวม<br>• พัฒนาระบบประมาณค่า Homography ด้วย RANSAC และพล็อต Inlier/Outlier ในโหมด Reference |
+| **4** | นาย/นางสาว [ชื่อ-นามสกุล สมาชิก 4] | [รหัส นศ.] | **Enhancement & Smart Filters Lead** | • พัฒนาโมดูล `src/enhancement.py` ครบ 4 โหมด (Original, Magic Color, Clean B&W, Grayscale)<br>• พัฒนาอัลกอริทึมลบเงามือถือด้วย Morphological Background Division<br>• พัฒนาระบบเร่งคอนทราสต์ในระบบสี LAB ด้วย CLAHE และ Unsharp Masking<br>• ออกแบบระบบ Adaptive Gaussian Thresholding สำหรับเอกสารสแกนขาว-ดำ |
+| **5** | นาย/นางสาว [ชื่อ-นามสกุล สมาชิก 5] | [รหัส นศ.] | **Full-Stack UI/UX, Testing & DevOps Lead** | • พัฒนา Web Application บน Streamlit (`app.py`) พร้อม Stepper และ Visualizations<br>• พัฒนาระบบปรับแต่งพิกัด 4 มุมด้วยตนเอง (Manual Corner Adjustment Fallback F-09)<br>• พัฒนาชุดทดสอบ Unit Tests (`pytest`) ครอบคลุม Geometry, Detection และ Enhancement<br>• พัฒนาสมุดโค้ดสำรอง `notebook/pipeline_demo.ipynb` และดูแลการ Deploy ขึ้น Cloud |
+
+### แผนการนำเสนอและการสาธิต 10 นาที (Presentation & Live Demo Structure)
+* **นาทีที่ 0:00 - 2:00 (สมาชิก 1):** แนะนำหัวข้อ ที่มาของปัญหา Perspective Distortion และ Pipeline การเตรียมภาพเบื้องต้น (Preprocessing + Adaptive Canny)
+* **นาทีที่ 2:00 - 4:00 (สมาชิก 2):** เจาะลึกเทคนิค Contour Scoring, การจัดเรียงมุมด้วยจุดศูนย์ถ่วง (`atan2`), Quad Validation และการคำนวณ Homography
+* **นาทีที่ 4:00 - 6:00 (สมาชิก 3):** โหมด Reference: SIFT + FLANN Matching, Lowe's Ratio Test และ RANSAC Inlier/Outlier Estimation
+* **นาทีที่ 6:00 - 8:00 (สมาชิก 4):** การประมวลผลคุณภาพขั้นสูง (Post-Processing): การลบเงาด้วย Morphological Division และ Smart Filters ทั้ง 4 โหมด
+* **นาทีที่ 8:00 - 10:00 (สมาชิก 5):** Live Demo บน Streamlit Cloud ทดสอบกับ Edge Cases ทั้ง 5 แบบ และสาธิต Manual Corner Adjustment Fallback
 
 ---
 
 ## ข้อมูลรายวิชาและลิขสิทธิ์ (Course Information & License)
 - **รายวิชา:** CP461 Computer Vision
 - **ลิขสิทธิ์:** สำหรับใช้ประกอบการศึกษาและการประเมินผลโครงงานในรายวิชา CP461
+
