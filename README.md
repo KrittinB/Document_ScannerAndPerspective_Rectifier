@@ -158,10 +158,10 @@ https://documentscannerandperspectiverectifier-ceuurr4pfg8wzjqzvrygv6.streamlit.
 
 ```text
 document-scanner/
-├── app.py                         # Web Application หลักพัฒนาด้วย Streamlit (UI, Filters, Pipeline Runner)
+├── app.py                         # Web Application หลักพัฒนาด้วย Streamlit (UI, Filters, Pipeline Runner, Manual Fallback)
 ├── requirements.txt               # รายการ Python dependencies (รองรับ Python 3.10+)
 ├── packages.txt                   # รายการ System packages สำหรับ Cloud Linux Environment (libgl1, libglib2.0-0)
-├── README.md                      # เอกสารคู่มือการใช้งานและรายละเอียดโปรเจกต์
+├── README.md                      # เอกสารคู่มือการใช้งาน รายละเอียดโปรเจกต์ และ Task Allocation
 ├── CP461_document_scanner_spec.md # ข้อกำหนดทางเทคนิคและเกณฑ์โครงงาน CP461
 ├── CHANGELOG.md                   # บันทึกการอัปเดตและประวัติการแก้บั๊กอย่างละเอียด
 ├── src/
@@ -172,11 +172,21 @@ document-scanner/
 │   ├── geometry.py                # ฟังก์ชัน Homography, RANSAC, ขนาด A4 ตามทิศทาง และ Warp ทั้งสองโหมด
 │   ├── enhancement.py             # ระบบปรับปรุงภาพเอกสาร ลบเงามือถือ Magic Color และ Clean B&W
 │   └── utils.py                   # ฟังก์ชันวาดเส้นกรอบมุม, แสดงคู่จุด Match, Inliers/Outliers, และแปลง Format ภาพ
+├── notebook/
+│   └── pipeline_demo.ipynb        # สมุดโค้ดสำรองสำหรับรันบน Colab/Local สาธิต Pipeline ครบ 12 ขั้นตอน (F-12)
+├── scripts/
+│   ├── benchmark_pipeline.py      # สคริปต์ทดสอบและวัดค่า Latency/FPS การประมวลผลของระบบ
+│   └── create_pipeline_demo_notebook.py # สคริปต์สร้างและคอมไพล์ Jupyter Notebook
 └── tests/
     ├── test_enhancement.py        # Automated unit tests สำหรับฟังก์ชัน Document Enhancement
-    └── sample_images/             # ชุดภาพตัวอย่างสำหรับทดสอบระบบ
-        ├── test1.webp             # ภาพเอกสารมุมเอียงทั่วไป
-        └── test2.webp             # ภาพเอกสารมุมเอียงองศาสูง (Perspective จัด)
+    ├── test_geometry.py           # Automated unit tests สำหรับ Homography, มุม 45°, และ Ground Truth Rectification (F-11)
+    ├── test_detection.py          # Automated unit tests สำหรับ Edge, Contour, และ Failure Handling (F-11)
+    └── sample_images/             # ชุดภาพตัวอย่างทดสอบ ครอบคลุม Standard, Reference Pair และ Edge Cases
+        ├── test1.webp             # ภาพเอกสารแนวนอนทั่วไป
+        ├── test2.webp             # ภาพเอกสารมุมเอียงองศาสูง
+        ├── ref1_flat_reference.jpg# ภาพเอกสารอ้างอิงวางตรง (Reference Ground Truth)
+        ├── ref1_skewed_photo.jpg  # ภาพเอกสารเดียวกันถ่ายเอียง (Reference Skewed)
+        └── edge1 - edge5 (.jpg)   # ภาพทดสอบกรณี Edge Cases (แสงเงา, พื้นหลังรก, มุมบัง ฯลฯ)
 ```
 
 ---
