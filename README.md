@@ -20,6 +20,7 @@ https://documentscannerandperspectiverectifier-ceuurr4pfg8wzjqzvrygv6.streamlit.
 - [กระบวนการทำงาน (End-to-End Pipeline)](#กระบวนการทำงาน-end-to-end-pipeline)
 - [โครงสร้างโปรเจกต์ (Project Structure)](#โครงสร้างโปรเจกต์-project-structure)
 - [เทคโนโลยีที่ใช้ (Tech Stack)](#เทคโนโลยีที่ใช้-tech-stack)
+- [ผลการทดสอบประสิทธิภาพ (Performance Benchmark)](#ผลการทดสอบประสิทธิภาพ-performance-benchmark)
 - [การติดตั้งและรัน Local (Installation & Local Run)](#การติดตั้งและรัน-local-installation--local-run)
 - [การนำไปขึ้นคลาวด์ (Deployment)](#การนำไปขึ้นคลาวด์-deployment)
 - [ชุดข้อมูลทดสอบ (Test Dataset)](#ชุดข้อมูลทดสอบ-test-dataset)
@@ -215,6 +216,31 @@ document-scanner/
 
 > เวอร์ชันที่ระบุคือรอบตรวจสอบล่าสุด (27 ก.ย. 2026) — รันครบทั้ง 91 automated tests (`pytest`)
 > และรัน end-to-end ผ่านเบราว์เซอร์จริงทั้งโหมด Auto, Reference และ Edge Case ผ่านหมด ดูรายละเอียดเวอร์ชันที่แน่นอนใน `requirements.txt`
+
+---
+
+## ผลการทดสอบประสิทธิภาพ (Performance Benchmark)
+
+วัดผลด้วย `scripts/benchmark_pipeline.py` โดยรันบนภาพตัวอย่างจาก `tests/sample_images/` (เครื่อง Local, CPU-only, ไม่มี GPU acceleration):
+
+| ขั้นตอน | เวลาที่ใช้ | หมายเหตุ |
+|---|---:|---|
+| Preprocessing (Resize + Gray + Blur) | ~3.6 ms | |
+| Edge Detection + Contour + atan2 | ~2.1 ms | |
+| Perspective Warp (Auto, A4 1200px) | ~2.1 ms | |
+| **รวมโหมด Auto** | **~7.8 ms (~128 FPS)** | เร็วมาก เหมาะกับการใช้งาน Interactive |
+| Feature Extraction (SIFT) | ~16 ms | 491 keypoints |
+| Feature Extraction (ORB) | ~192 ms | 1000 keypoints (ช้ากว่า SIFT ในกรณีนี้เพราะจำนวน keypoints มากกว่า) |
+| SIFT + FLANN Matching + Ratio Test | ~176 ms | 218 good matches |
+| RANSAC Homography + Warp (Reference) | ~2.6 ms | 171/218 inliers |
+| **รวมโหมด Reference** (SIFT+FLANN) | **~178 ms** | ส่วนใหญ่หมดไปกับ Feature Extraction/Matching ไม่ใช่ RANSAC |
+| Enhancement — Original (Pass-through) | ~0.6 ms | |
+| Enhancement — Magic Color (Shadow Removal + LAB CLAHE) | ~154 ms | ขั้นตอนที่หนักที่สุดของ Enhancement |
+| Enhancement — Clean B&W | ~28 ms | |
+| Enhancement — Grayscale (CLAHE) | ~24 ms | |
+
+> ตัวเลขข้างต้นเป็นผลวัดจริงจากการรันสคริปต์ ไม่ใช่ค่าประมาณ — รันซ้ำได้ด้วยคำสั่ง `python scripts/benchmark_pipeline.py`
+> โหมด Auto เร็วพอสำหรับการโต้ตอบแบบ Real-time ส่วนโหมด Reference และฟิลเตอร์ Magic Color ใช้เวลานานกว่าเนื่องจากการคำนวณ Feature Matching และ CLAHE ที่มีความซับซ้อนสูงกว่า
 
 ---
 
