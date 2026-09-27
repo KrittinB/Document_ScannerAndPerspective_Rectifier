@@ -1,6 +1,7 @@
-# Compatible with Python 3.10+ (tested on Python 3.11 and 3.13)
+# Compatible with Python 3.10+ (tested on Python 3.11 and 3.13; re-verified on 3.11.9, 2026-09-27)
 # Headless build is required for Streamlit Cloud (avoids libGL dependency)
-opencv-python-headless>=4.8.0
-numpy>=1.26.0
-Pillow>=10.0.0
-streamlit>=1.30.0
+# Do NOT switch this back to plain `opencv-python` — it breaks the headless Cloud deploy (see CHANGELOG.md)
+opencv-python-headless>=5.0.0
+numpy>=2.1.0
+Pillow>=11.0.0
+streamlit>=1.60.0

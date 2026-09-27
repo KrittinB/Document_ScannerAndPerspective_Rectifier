@@ -14,6 +14,7 @@ https://documentscannerandperspectiverectifier-ceuurr4pfg8wzjqzvrygv6.streamlit.
 
 
 ## สารบัญ (Table of Contents)
+- [คู่มือการใช้งานแบบละเอียด (howto.html)](./howto.html)
 - [ภาพรวมของระบบ (Overview)](#ภาพรวมของระบบ-overview)
 - [ฟีเจอร์หลักและการออกแบบ UI (Features & UI Design)](#ฟีเจอร์หลักและการออกแบบ-ui-features--ui-design)
 - [กระบวนการทำงาน (End-to-End Pipeline)](#กระบวนการทำงาน-end-to-end-pipeline)
@@ -159,11 +160,14 @@ https://documentscannerandperspectiverectifier-ceuurr4pfg8wzjqzvrygv6.streamlit.
 ```text
 document-scanner/
 ├── app.py                         # Web Application หลักพัฒนาด้วย Streamlit (UI, Filters, Pipeline Runner, Manual Fallback)
+├── howto.html                     # คู่มือการใช้งานแบบละเอียด (เปิดในเบราว์เซอร์ได้โดยตรง ไม่ต้องรันเซิร์ฟเวอร์)
 ├── requirements.txt               # รายการ Python dependencies (รองรับ Python 3.10+)
 ├── packages.txt                   # รายการ System packages สำหรับ Cloud Linux Environment (libgl1, libglib2.0-0)
 ├── README.md                      # เอกสารคู่มือการใช้งาน รายละเอียดโปรเจกต์ และ Task Allocation
 ├── CP461_document_scanner_spec.md # ข้อกำหนดทางเทคนิคและเกณฑ์โครงงาน CP461
 ├── CHANGELOG.md                   # บันทึกการอัปเดตและประวัติการแก้บั๊กอย่างละเอียด
+├── docs/
+│   └── screenshots/               # ภาพหน้าจอประกอบคู่มือ howto.html
 ├── src/
 │   ├── __init__.py                # Source package initialization
 │   ├── preprocessing.py           # ฟังก์ชันปรับขนาดรูป, แปลง Grayscale, และ Gaussian Blur
@@ -176,11 +180,16 @@ document-scanner/
 │   └── pipeline_demo.ipynb        # สมุดโค้ดสำรองสำหรับรันบน Colab/Local สาธิต Pipeline ครบ 12 ขั้นตอน (F-12)
 ├── scripts/
 │   ├── benchmark_pipeline.py      # สคริปต์ทดสอบและวัดค่า Latency/FPS การประมวลผลของระบบ
-│   └── create_pipeline_demo_notebook.py # สคริปต์สร้างและคอมไพล์ Jupyter Notebook
+│   ├── create_pipeline_demo_notebook.py # สคริปต์สร้างและคอมไพล์ Jupyter Notebook
+│   ├── generate_edge_case_samples.py    # สคริปต์สร้างชุดภาพทดสอบ Edge Cases และ Reference Pair จำลอง
+│   └── verify_samples.py                # สคริปต์รัน pipeline ไล่ทุกภาพใน sample_images/ แล้วพิมพ์ผลตรวจสอบ
 └── tests/
     ├── test_enhancement.py        # Automated unit tests สำหรับฟังก์ชัน Document Enhancement
     ├── test_geometry.py           # Automated unit tests สำหรับ Homography, มุม 45°, และ Ground Truth Rectification (F-11)
     ├── test_detection.py          # Automated unit tests สำหรับ Edge, Contour, และ Failure Handling (F-11)
+    ├── test_preprocessing.py      # Automated unit tests สำหรับ resize/grayscale/Gaussian Blur
+    ├── test_features.py           # Automated unit tests สำหรับ SIFT/ORB extraction, matching และ ratio test
+    ├── test_utils.py              # Automated unit tests สำหรับฟังก์ชันแปลง format ภาพและ visualization
     └── sample_images/             # ชุดภาพตัวอย่างทดสอบ ครอบคลุม Standard, Reference Pair และ Edge Cases
         ├── test1.webp             # ภาพเอกสารแนวนอนทั่วไป
         ├── test2.webp             # ภาพเอกสารมุมเอียงองศาสูง
@@ -189,17 +198,23 @@ document-scanner/
         └── edge1 - edge5 (.jpg)   # ภาพทดสอบกรณี Edge Cases (แสงเงา, พื้นหลังรก, มุมบัง ฯลฯ)
 ```
 
+> **อยากได้คู่มือแบบ step-by-step พร้อมภาพหน้าจอจริงและตารางฟังก์ชันทั้งหมด?**
+> เปิดไฟล์ [`howto.html`](./howto.html) ในเบราว์เซอร์ — อธิบายทุกปุ่ม ทุกโหมด และ mapping จากหน้าจอไปยังฟังก์ชันจริงใน `src/`
+
 ---
 
 ## เทคโนโลยีที่ใช้ (Tech Stack)
 
-- **ภาษาหลัก:** Python 3.10+
-- **Computer Vision Library:** OpenCV (`opencv-python-headless` เวอร์ชัน 4.x)
-- **การประมวลผลเชิงตัวเลขและเมทริกซ์:** NumPy
-- **การประมวลผลและจัดการไฟล์ภาพ:** Pillow (PIL)
-- **Web Application Framework:** Streamlit
+- **ภาษาหลัก:** Python 3.10+ (ตรวจสอบล่าสุดบน 3.11.9)
+- **Computer Vision Library:** OpenCV (`opencv-python-headless` — ตรวจสอบล่าสุดบนเวอร์ชัน 5.x)
+- **การประมวลผลเชิงตัวเลขและเมทริกซ์:** NumPy (ตรวจสอบล่าสุดบนเวอร์ชัน 2.x)
+- **การประมวลผลและจัดการไฟล์ภาพ:** Pillow / PIL (ตรวจสอบล่าสุดบนเวอร์ชัน 12.x)
+- **Web Application Framework:** Streamlit (ตรวจสอบล่าสุดบนเวอร์ชัน 1.64.x)
 - **ระบบปฏิบัติการเป้าหมาย:** Cross-platform (Windows, macOS, Linux / Docker)
 - **Version Control:** Git & GitHub
+
+> เวอร์ชันที่ระบุคือรอบตรวจสอบล่าสุด (27 ก.ย. 2026) — รันครบทั้ง 91 automated tests (`pytest`)
+> และรัน end-to-end ผ่านเบราว์เซอร์จริงทั้งโหมด Auto, Reference และ Edge Case ผ่านหมด ดูรายละเอียดเวอร์ชันที่แน่นอนใน `requirements.txt`
 
 ---
 

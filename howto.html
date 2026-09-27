@@ -1,0 +1,738 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>คู่มือการใช้งาน — Document Scanner &amp; Perspective Rectifier</title>
+<meta name="description" content="คู่มือใช้งานแบบละเอียดของ Document Scanner & Perspective Rectifier (CP461) พร้อมคำอธิบายการทำงานของ Pipeline และตารางฟังก์ชันอ้างอิงทั้งหมด">
+<style>
+  :root{
+    --bg:#f7f7fb;
+    --surface:#ffffff;
+    --surface-2:#f1f0fa;
+    --border:#e2e0f0;
+    --text:#1f2233;
+    --text-dim:#5b5f77;
+    --accent:#6d5bd0;
+    --accent-2:#4338ca;
+    --accent-soft:#ede9fe;
+    --success:#0f9d58;
+    --success-soft:#e6f7ec;
+    --warn:#b45309;
+    --warn-soft:#fef3c7;
+    --danger:#b91c1c;
+    --danger-soft:#fee2e2;
+    --code-bg:#2b2740;
+    --code-text:#e7e4fb;
+    --shadow: 0 1px 3px rgba(30,20,60,0.06), 0 8px 24px rgba(30,20,60,0.05);
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#15131f;
+      --surface:#1c1a2b;
+      --surface-2:#221f35;
+      --border:#332f4d;
+      --text:#eceafc;
+      --text-dim:#a8a4c4;
+      --accent:#a08bff;
+      --accent-2:#c4b5fd;
+      --accent-soft:#2c2650;
+      --success:#4ade80;
+      --success-soft:#123024;
+      --warn:#fbbf24;
+      --warn-soft:#3a2c0d;
+      --danger:#f87171;
+      --danger-soft:#3a1717;
+      --code-bg:#0f0d1a;
+      --code-text:#e7e4fb;
+      --shadow: 0 1px 3px rgba(0,0,0,0.35), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#15131f; --surface:#1c1a2b; --surface-2:#221f35; --border:#332f4d;
+    --text:#eceafc; --text-dim:#a8a4c4; --accent:#a08bff; --accent-2:#c4b5fd;
+    --accent-soft:#2c2650; --success:#4ade80; --success-soft:#123024;
+    --warn:#fbbf24; --warn-soft:#3a2c0d; --danger:#f87171; --danger-soft:#3a1717;
+    --code-bg:#0f0d1a; --code-text:#e7e4fb;
+    --shadow: 0 1px 3px rgba(0,0,0,0.35), 0 8px 24px rgba(0,0,0,0.35);
+  }
+
+  *{ box-sizing:border-box; }
+  html{ scroll-behavior:smooth; }
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family: "Segoe UI", "Noto Sans Thai", "Sarabun", -apple-system, BlinkMacSystemFont, sans-serif;
+    line-height:1.65;
+  }
+  a{ color:var(--accent-2); }
+  img{ max-width:100%; display:block; border-radius:10px; }
+
+  .topbar{
+    position:sticky; top:0; z-index:50;
+    display:flex; align-items:center; justify-content:space-between;
+    gap:12px; padding:10px 20px;
+    background:linear-gradient(135deg,#2c2456,#4338ca 60%,#6d5bd0);
+    color:#fff; box-shadow:var(--shadow);
+  }
+  .topbar .brand{ font-weight:700; font-size:1.02rem; display:flex; align-items:center; gap:8px;}
+  .topbar .brand .dot{ width:9px; height:9px; border-radius:50%; background:#7CFFCB; box-shadow:0 0 0 3px rgba(124,255,203,.25); }
+  .theme-toggle{
+    border:1px solid rgba(255,255,255,.35); background:rgba(255,255,255,.08); color:#fff;
+    border-radius:20px; padding:6px 14px; font-size:.82rem; cursor:pointer;
+  }
+  .theme-toggle:hover{ background:rgba(255,255,255,.18); }
+
+  .hero{
+    max-width:1200px; margin:0 auto; padding:44px 24px 28px;
+  }
+  .hero h1{ font-size:2rem; margin:0 0 10px; letter-spacing:-.3px; }
+  .hero p.lead{ color:var(--text-dim); font-size:1.05rem; max-width:760px; margin:0 0 18px; }
+  .hero .badges{ display:flex; flex-wrap:wrap; gap:8px; }
+  .pill{
+    display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:999px;
+    background:var(--accent-soft); color:var(--accent-2); font-size:.78rem; font-weight:600;
+    border:1px solid var(--border);
+  }
+  .pill.green{ background:var(--success-soft); color:var(--success); }
+  .pill.amber{ background:var(--warn-soft); color:var(--warn); }
+
+  .layout{
+    max-width:1200px; margin:0 auto; display:grid;
+    grid-template-columns: 250px 1fr; gap:28px; padding:0 24px 80px;
+    align-items:start;
+  }
+  @media (max-width: 900px){
+    .layout{ grid-template-columns: 1fr; }
+    nav.toc{ position:static; max-height:none; order:2; }
+  }
+
+  nav.toc{
+    position:sticky; top:64px; align-self:start;
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:16px; box-shadow:var(--shadow); max-height:calc(100vh - 90px); overflow:auto;
+  }
+  nav.toc div.group-title{
+    font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim);
+    margin:14px 4px 6px; font-weight:700;
+  }
+  nav.toc div.group-title:first-child{ margin-top:0; }
+  nav.toc a{
+    display:block; padding:6px 10px; border-radius:8px; color:var(--text); text-decoration:none;
+    font-size:.88rem;
+  }
+  nav.toc a:hover{ background:var(--surface-2); color:var(--accent-2); }
+
+  main{ min-width:0; }
+  section{ margin-bottom:52px; scroll-margin-top:76px; }
+  section h2{
+    font-size:1.4rem; margin:0 0 6px; padding-bottom:10px; border-bottom:2px solid var(--accent-soft);
+    display:flex; align-items:center; gap:10px;
+  }
+  section h2 .num{
+    display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px;
+    border-radius:8px; background:var(--accent); color:#fff; font-size:.85rem; font-weight:700;
+  }
+  section h3{ font-size:1.08rem; margin:26px 0 10px; color:var(--text); }
+  section > p.subtitle{ color:var(--text-dim); margin:8px 0 20px; }
+
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:18px 20px; box-shadow:var(--shadow); margin-bottom:16px;
+  }
+  .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .grid-3{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  @media (max-width:760px){ .grid-2, .grid-3{ grid-template-columns:1fr; } }
+
+  figure{ margin:0; }
+  figure.shot{
+    border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; background:var(--surface);
+    box-shadow:var(--shadow);
+  }
+  figure.shot img{ border-radius:0; }
+  figcaption{ padding:10px 14px; font-size:.84rem; color:var(--text-dim); background:var(--surface-2); }
+
+  table{ width:100%; border-collapse:collapse; font-size:.88rem; }
+  table.func{ margin-top:10px; }
+  th, td{ text-align:left; padding:9px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th{ background:var(--surface-2); font-size:.78rem; text-transform:uppercase; letter-spacing:.03em; color:var(--text-dim); }
+  tr:last-child td{ border-bottom:none; }
+  code, .code-inline{
+    background:var(--surface-2); border:1px solid var(--border); border-radius:5px; padding:1px 6px;
+    font-family: "Cascadia Code","Consolas",ui-monospace,monospace; font-size:.85em; color:var(--accent-2);
+  }
+  pre{
+    background:var(--code-bg); color:var(--code-text); padding:16px 18px; border-radius:12px;
+    overflow:auto; font-family:"Cascadia Code","Consolas",ui-monospace,monospace; font-size:.86rem;
+    box-shadow:var(--shadow);
+  }
+  pre code{ background:none; border:none; padding:0; color:inherit; }
+
+  .steps{ counter-reset:step; list-style:none; padding:0; margin:0; }
+  .steps > li{
+    counter-increment:step; position:relative; padding:4px 0 4px 42px; margin-bottom:14px;
+  }
+  .steps > li::before{
+    content:counter(step); position:absolute; left:0; top:2px; width:28px; height:28px;
+    border-radius:50%; background:var(--accent); color:#fff; font-weight:700; font-size:.82rem;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  .callout{
+    border-radius:var(--radius); padding:14px 18px; border:1px solid var(--border); margin:16px 0;
+    display:flex; gap:12px; align-items:flex-start;
+  }
+  .callout .ic{ font-size:1.15rem; line-height:1; margin-top:1px; }
+  .callout.tip{ background:var(--accent-soft); border-color:var(--accent-soft); }
+  .callout.warn{ background:var(--warn-soft); border-color:var(--warn-soft); }
+  .callout.danger{ background:var(--danger-soft); border-color:var(--danger-soft); }
+  .callout.success{ background:var(--success-soft); border-color:var(--success-soft); }
+  .callout strong{ display:block; margin-bottom:2px; }
+
+  .badge-flow{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:14px 0 20px; }
+  .badge-flow span.step{
+    background:var(--surface-2); border:1px solid var(--border); border-radius:999px;
+    padding:6px 14px; font-size:.82rem; font-weight:600;
+  }
+  .badge-flow span.arrow{ color:var(--text-dim); }
+
+  details.faq{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:4px 16px;
+    margin-bottom:10px;
+  }
+  details.faq summary{ cursor:pointer; padding:12px 0; font-weight:600; }
+  details.faq[open] summary{ color:var(--accent-2); }
+  details.faq p{ margin:0 0 14px; color:var(--text-dim); }
+
+  footer{
+    max-width:1200px; margin:0 auto; padding:20px 24px 60px; color:var(--text-dim); font-size:.84rem;
+    border-top:1px solid var(--border); margin-top:20px;
+  }
+  .top-link{ font-size:.78rem; }
+  ::selection{ background:var(--accent-soft); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span> Document Scanner &amp; Perspective Rectifier — คู่มือการใช้งาน</div>
+  <button class="theme-toggle" id="themeToggle" type="button">🌓 สลับธีม</button>
+</div>
+
+<div class="hero">
+  <h1>คู่มือการใช้งานแบบละเอียด</h1>
+  <p class="lead">
+    เอกสารนี้สอนใช้งานเว็บแอป <strong>Document Scanner &amp; Perspective Rectifier</strong> (โปรเจกต์ CP461 Computer Vision)
+    ตั้งแต่การติดตั้ง การกดใช้งานทีละปุ่ม ไปจนถึงคำอธิบายว่า “ระบบทำงานยังไง อะไรอยู่ตรงไหน เรียกฟังก์ชันอะไรบ้าง”
+    เพื่อให้ทั้งผู้ใช้ทั่วไปและคนที่มาอ่านโค้ดต่อเข้าใจภาพเดียวกัน
+  </p>
+  <div class="badges">
+    <span class="pill green">✔ ทดสอบแล้วผ่านเบราว์เซอร์จริงทั้ง 3 โหมด</span>
+    <span class="pill">Python 3.11.9</span>
+    <span class="pill">OpenCV 5.x (headless)</span>
+    <span class="pill">Streamlit 1.64.x</span>
+    <span class="pill amber">อัปเดตล่าสุด: 27 ก.ย. 2026</span>
+  </div>
+</div>
+
+<div class="layout">
+  <nav class="toc" aria-label="สารบัญ">
+    <div class="group-title">เริ่มต้น</div>
+    <a href="#overview">1. ภาพรวมระบบ</a>
+    <a href="#getting-started">2. ติดตั้งและรันแอป</a>
+    <a href="#ui-tour">3. ทัวร์หน้าจอทีละส่วน</a>
+    <div class="group-title">การทำงานเชิงลึก</div>
+    <a href="#auto-mode">4. โหมด Auto — ทำงานอย่างไร</a>
+    <a href="#reference-mode">5. โหมด Reference — ทำงานอย่างไร</a>
+    <a href="#filters">6. ฟิลเตอร์ปรับปรุงเอกสาร 4 แบบ</a>
+    <a href="#manual-fallback">7. ปรับมุม 4 จุดด้วยตนเอง</a>
+    <div class="group-title">อ้างอิง</div>
+    <a href="#function-reference">8. ตารางฟังก์ชันอ้างอิงทั้งหมด</a>
+    <a href="#scripts">9. สคริปต์เสริม (scripts/)</a>
+    <div class="group-title">แก้ปัญหา</div>
+    <a href="#troubleshooting">10. แก้ปัญหาเบื้องต้น / Edge Cases</a>
+    <a href="#tips">11. เคล็ดลับก่อนนำเสนอ</a>
+    <a href="#faq">12. คำถามที่พบบ่อย</a>
+  </nav>
+
+  <main>
+
+    <section id="overview">
+      <h2><span class="num">1</span> ภาพรวมระบบ</h2>
+      <p class="subtitle">สิ่งที่แอปนี้ทำ และวิธีคิดของระบบในหนึ่งย่อหน้า</p>
+      <div class="card">
+        <p>
+          แอปนี้รับภาพถ่ายเอกสารที่มีมุมมองเอียง (perspective distortion) แล้วแปลงกลับให้เป็นภาพเอกสารมุมตรง สัดส่วนมาตรฐาน
+          A4 (1&nbsp;:&nbsp;1.414) เหมือนสแกนจากเครื่องสแกนจริง โดยมี <strong>2 เส้นทาง</strong> ในการคำนวณ Homography Matrix
+          (เมทริกซ์การแปลงมุมมอง) ซึ่งแอปบอกผู้ใช้ตรง ๆ เสมอว่ากำลังใช้เส้นทางไหน:
+        </p>
+        <div class="grid-2">
+          <div class="card" style="margin:0;">
+            <strong>🅰️ โหมด Auto (ภาพเดียว)</strong>
+            <p style="color:var(--text-dim); margin:8px 0 0;">
+              อัปโหลดภาพเดียว → หาขอบกระดาษด้วย Canny Edge + Contour → ได้ 4 มุม →
+              คำนวณ Homography ตรง ๆ ด้วย <code>cv2.getPerspectiveTransform</code>.
+              เร็ว เหมาะกับถ่ายเอกสารทั่วไปที่ขอบตัดกับพื้นหลังชัดเจน
+            </p>
+          </div>
+          <div class="card" style="margin:0;">
+            <strong>🅱️ โหมด Reference (2 ภาพ)</strong>
+            <p style="color:var(--text-dim); margin:8px 0 0;">
+              อัปโหลด 2 ภาพ: ภาพถ่ายเอียง + ภาพเอกสารหน้าเดียวกันที่แบนราบ → สกัดจุดเด่นด้วย SIFT/ORB →
+              จับคู่ (BFMatcher/FLANN) → กรองด้วย Lowe's Ratio Test → ประมาณ Homography ด้วย
+              <strong>RANSAC จริง</strong>. เหมาะเมื่อขอบกระดาษไม่ชัดหรือถูกบดบัง
+            </p>
+          </div>
+        </div>
+        <p style="margin-top:16px;">
+          หลังจากได้ภาพ A4 มุมตรงแล้ว ผู้ใช้เลือก <strong>ฟิลเตอร์ปรับปรุงคุณภาพ</strong> ได้ 4 แบบ (Original / Magic Color /
+          Clean B&amp;W / Grayscale) ก่อนดาวน์โหลดไฟล์ PNG ความละเอียดเต็ม
+        </p>
+      </div>
+    </section>
+
+    <section id="getting-started">
+      <h2><span class="num">2</span> ติดตั้งและรันแอป</h2>
+      <ol class="steps">
+        <li>
+          <strong>โคลนโปรเจกต์และเข้าโฟลเดอร์</strong>
+          <pre><code>git clone https://github.com/KrittinB/Document_ScannerAndPerspective_Rectifier.git
+cd Document_ScannerAndPerspective_Rectifier</code></pre>
+        </li>
+        <li>
+          <strong>สร้างและเปิดใช้งาน Virtual Environment (แนะนำ)</strong>
+          <pre><code># Windows
+python -m venv venv
+venv\Scripts\activate
+
+# macOS / Linux
+python3 -m venv venv
+source venv/bin/activate</code></pre>
+        </li>
+        <li>
+          <strong>ติดตั้ง Dependencies</strong>
+          <pre><code>pip install -r requirements.txt</code></pre>
+          <p style="color:var(--text-dim); margin:6px 0 0;">
+            ไฟล์นี้ระบุ <code>opencv-python-headless</code> เจตนา — <u>อย่า</u>เปลี่ยนกลับไปเป็น <code>opencv-python</code>
+            เด็ดขาด เพราะจะพังตอน deploy ขึ้น Streamlit Cloud (ต้องการ libGL ที่ container ไม่มี)
+          </p>
+        </li>
+        <li>
+          <strong>รันเว็บแอป</strong>
+          <pre><code>streamlit run app.py</code></pre>
+          เปิดเบราว์เซอร์ไปที่ <code>http://localhost:8501</code>
+        </li>
+        <li>
+          <strong>(ทางเลือก) รันชุดทดสอบอัตโนมัติ เพื่อยืนยันว่าทุกโมดูลทำงานถูกต้องก่อนใช้งานจริง</strong>
+          <pre><code>python -m pytest -q</code></pre>
+        </li>
+      </ol>
+      <div class="callout tip">
+        <div class="ic">💡</div>
+        <div>
+          <strong>ไม่อยากติดตั้งอะไรเลย?</strong>
+          ใช้ลิงก์ที่ deploy ไว้แล้วบน Streamlit Community Cloud ได้ทันที (ดูลิงก์ใน README.md หัวข้อ “การนำไปขึ้นคลาวด์”)
+        </div>
+      </div>
+    </section>
+
+    <section id="ui-tour">
+      <h2><span class="num">3</span> ทัวร์หน้าจอทีละส่วน</h2>
+      <p class="subtitle">หน้าเว็บแบ่งเป็น 3 ส่วนหลัก ไล่จากบนลงล่าง</p>
+
+      <h3>Section 1 — Upload &amp; Settings</h3>
+      <figure class="shot">
+        <img src="docs/screenshots/01-initial-screen.png" alt="หน้าจอเริ่มต้นของแอป แสดง Section 1 Upload และ Settings">
+        <figcaption>หน้าจอตอนเปิดแอปครั้งแรก — ยังไม่ได้เลือกภาพ</figcaption>
+      </figure>
+      <table class="func">
+        <thead><tr><th>องค์ประกอบ</th><th>ทำหน้าที่อะไร</th></tr></thead>
+        <tbody>
+          <tr><td><strong>ชุดภาพตัวอย่างทดสอบ</strong> (dropdown)</td><td>เลือกภาพจาก <code>tests/sample_images/</code> มาทดสอบทันทีโดยไม่ต้องอัปโหลดเอง มีทั้งภาพมาตรฐาน คู่ภาพ Reference และ Edge Case 5 แบบ</td></tr>
+          <tr><td><strong>Upload</strong> (file uploader)</td><td>อัปโหลดภาพของตัวเอง (JPG/PNG/WEBP) แทนภาพตัวอย่าง — เรียก <code>utils.bytes_to_numpy_bgr()</code> แปลงไฟล์เป็น numpy array</td></tr>
+          <tr><td><strong>Rectification Mode</strong> (radio)</td><td>สลับ Auto ↔ Reference — ถ้าเลือก Reference จะโผล่ช่องอัปโหลดภาพอ้างอิงเพิ่มอัตโนมัติ</td></tr>
+          <tr><td><strong>Feature Extractor</strong> (SIFT/ORB)</td><td>เลือกอัลกอริทึมสกัดจุดเด่น ใช้ทั้งสองโหมด (โหมด Auto ใช้แค่โชว์ผล ไม่ได้เอาไปคำนวณ H)</td></tr>
+          <tr><td><strong>Feature Matcher</strong> (BFMatcher/FLANN)</td><td>วิธีจับคู่จุดเด่น — <em>ใช้เฉพาะโหมด Reference</em> เท่านั้น (ปิดใช้งานถ้าอยู่โหมด Auto)</td></tr>
+          <tr><td><strong>Lowe's Ratio Threshold</strong> (slider 0.50–0.95)</td><td>เกณฑ์กรองคู่จุดที่กำกวมออกก่อนเข้า RANSAC — ค่ามาตรฐานคือ 0.70–0.75</td></tr>
+          <tr><td><strong>Output Resolution</strong> (slider 600–1600px)</td><td>กำหนดด้านยาวของภาพผลลัพธ์ A4 อีกด้านคำนวณอัตโนมัติจากสัดส่วน 1:1.414</td></tr>
+          <tr><td><strong>Run Scan Pipeline</strong> (ปุ่มหลัก)</td><td>เริ่มประมวลผลทั้ง pipeline ตามโหมดที่เลือก</td></tr>
+          <tr><td><strong>Download A4</strong> (ปุ่มบนสุด)</td><td>ดาวน์โหลดผลลัพธ์แบบเร็ว — <span class="pill amber" style="font-size:.72rem;">ดูข้อควรระวังในหัวข้อ 11</span></td></tr>
+          <tr><td><strong>Reset</strong></td><td>ล้างภาพ/ผลลัพธ์/สถานะทั้งหมด กลับไปหน้าเริ่มต้น</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Section 2 — Main Results</h3>
+      <figure class="shot">
+        <img src="docs/screenshots/02-auto-result.png" alt="ผลลัพธ์โหมด Auto พร้อมภาพ 3 ช่องและตัวเลือกฟิลเตอร์">
+        <figcaption>ผลลัพธ์หลังกด Run Scan Pipeline ในโหมด Auto — 3 ช่องภาพ + badge บอกที่มาของ Homography + ฟิลเตอร์เอกสาร</figcaption>
+      </figure>
+      <p>แสดงผล 3 ช่องเทียบกัน: <strong>ภาพต้นฉบับ</strong> → <strong>4 มุมที่ตรวจจับ (Auto) หรือภาพอ้างอิง (Reference)</strong> →
+      <strong>ผลลัพธ์ A4</strong> พร้อมแถบ badge บอกว่า Homography มาจากไหน (RANSAC / contour / ปรับมือ) และเมตริกตัวเลข
+      (จำนวน keypoints, inliers, ทิศทางเอกสาร ฯลฯ)</p>
+
+      <h3>Section 3 — Technical Details (expander)</h3>
+      <figure class="shot">
+        <img src="docs/screenshots/05-reference-technical.png" alt="แผงรายละเอียดทางเทคนิค แสดง Feature Matching และ RANSAC Inlier/Outlier">
+        <figcaption>เปิดกาง “Technical Details” เพื่อดู Canny Edge Map, Keypoints, Feature Matching, RANSAC Inlier/Outlier และเมทริกซ์ Homography จริง</figcaption>
+      </figure>
+      <p>ส่วนนี้เปิด/ปิดได้ (ค่าเริ่มต้นปิด) ใช้เวลาตรวจการบ้าน/นำเสนองาน เพราะโชว์ตัวเลขและภาพประกอบทุกขั้นตอนของอัลกอริทึมจริง
+      ไม่ใช่แค่ผลลัพธ์สุดท้าย</p>
+    </section>
+
+    <section id="auto-mode">
+      <h2><span class="num">4</span> โหมด Auto — ทำงานอย่างไร</h2>
+      <p class="subtitle">ไล่ทีละสเต็ปตั้งแต่กดปุ่มจนได้ภาพ A4 พร้อมชี้ว่าแต่ละสเต็ปอยู่ไฟล์ไหน ฟังก์ชันอะไร</p>
+
+      <div class="badge-flow">
+        <span class="step">Upload</span><span class="arrow">→</span>
+        <span class="step">Preprocess</span><span class="arrow">→</span>
+        <span class="step">Canny + Contour</span><span class="arrow">→</span>
+        <span class="step">Corner Ordering</span><span class="arrow">→</span>
+        <span class="step">Quad Validation</span><span class="arrow">→</span>
+        <span class="step">getPerspectiveTransform</span><span class="arrow">→</span>
+        <span class="step">Warp → A4</span>
+      </div>
+
+      <table class="func">
+        <thead><tr><th>ลำดับ</th><th>สิ่งที่เกิดขึ้น</th><th>ฟังก์ชัน</th><th>ไฟล์</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>ย่อภาพถ้าด้านยาวเกิน 1200px, แปลง grayscale, Gaussian Blur 5×5 ลด noise</td><td><code>preprocess()</code></td><td><code>src/preprocessing.py</code></td></tr>
+          <tr><td>2</td><td>หาขอบด้วย Canny (threshold ปรับอัตโนมัติจาก median ของภาพ) แล้วปิดรอยขาดขอบด้วย morphological closing</td><td><code>detect_edges()</code></td><td><code>src/detection.py</code></td></tr>
+          <tr><td>3</td><td>หา contour ที่ approx ได้ 4 จุด ให้คะแนนตามพื้นที่ × อัตราส่วนใกล้ A4 เลือกตัวคะแนนสูงสุด (ไม่ใช่ตัวแรกที่เจอ) พร้อม fallback 2 ชั้นถ้าหาไม่เจอ</td><td><code>find_document_contour()</code></td><td><code>src/detection.py</code></td></tr>
+          <tr><td>4</td><td>เรียงลำดับ 4 จุดให้เป็น TL, TR, BR, BL เสมอ ด้วยมุมรอบจุดศูนย์ถ่วง (atan2) — ทนต่อกระดาษเอียง 45°</td><td><code>order_corners()</code></td><td><code>src/detection.py</code></td></tr>
+          <tr><td>5</td><td>ตรวจสอบว่า 4 จุดใช้งานได้จริง (ไม่ซ้ำ ไม่เว้า ไม่เล็กเกินไป) ก่อนคำนวณต่อ</td><td><code>validate_quad()</code></td><td><code>src/detection.py</code></td></tr>
+          <tr><td>6</td><td>รวมสเต็ป 2–5 เป็น pipeline เดียว คืนสถานะ success/message ที่ใช้แสดงผลตรง ๆ</td><td><code>detect_document()</code></td><td><code>src/detection.py</code></td></tr>
+          <tr><td>7</td><td>สกัด SIFT/ORB keypoints มาโชว์ประกอบ (ไม่ได้เอาไปคำนวณ H ในโหมดนี้)</td><td><code>extract_features()</code></td><td><code>src/features.py</code></td></tr>
+          <tr><td>8</td><td>คำนวณสัดส่วน/ทิศทาง A4 ผลลัพธ์จาก 4 มุมที่ได้</td><td><code>get_a4_dimensions()</code>, <code>quad_is_landscape()</code></td><td><code>src/geometry.py</code></td></tr>
+          <tr><td>9</td><td>สร้าง Homography ตรงจาก 4 มุม แล้ว warp ภาพต้นฉบับความละเอียดเต็ม (ไม่ใช่ภาพที่ย่อไว้ตอน detect) เป็น A4</td><td><code>rectify_from_corners()</code></td><td><code>src/geometry.py</code></td></tr>
+        </tbody>
+      </table>
+      <div class="callout tip">
+        <div class="ic">📌</div>
+        <div><strong>สิ่งที่แอปพยายามซื่อสัตย์กับผู้ใช้:</strong> โหมด Auto ไม่ได้ใช้ RANSAC หรือ feature matching ในการหา Homography เลย
+        แม้จะสกัด keypoints มาโชว์ก็ตาม — badge สีเหลืองอำพันบนหน้าเว็บจะบอกตรง ๆ ว่า “Homography จาก 4 มุม (contour) — ไม่ได้ใช้ feature”</div>
+      </div>
+    </section>
+
+    <section id="reference-mode">
+      <h2><span class="num">5</span> โหมด Reference — ทำงานอย่างไร</h2>
+      <p class="subtitle">เส้นทางที่ใช้ SIFT/ORB + Feature Matching + RANSAC เต็มรูปแบบ</p>
+
+      <div class="badge-flow">
+        <span class="step">Upload 2 ภาพ</span><span class="arrow">→</span>
+        <span class="step">SIFT/ORB</span><span class="arrow">→</span>
+        <span class="step">BFMatcher/FLANN</span><span class="arrow">→</span>
+        <span class="step">Lowe's Ratio Test</span><span class="arrow">→</span>
+        <span class="step">RANSAC</span><span class="arrow">→</span>
+        <span class="step">findHomography</span><span class="arrow">→</span>
+        <span class="step">Warp → A4</span>
+      </div>
+
+      <figure class="shot">
+        <img src="docs/screenshots/04-reference-result.png" alt="ผลลัพธ์โหมด Reference พร้อมเมตริก Keypoints, Good Matches และ RANSAC Inliers">
+        <figcaption>ผลลัพธ์จริงจากคู่ภาพตัวอย่าง ref1 — 1001/1002 keypoints, 217 good matches หลัง ratio test, RANSAC เหลือ 171 inliers (79%)</figcaption>
+      </figure>
+
+      <table class="func">
+        <thead><tr><th>ลำดับ</th><th>สิ่งที่เกิดขึ้น</th><th>ฟังก์ชัน</th><th>ไฟล์</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Preprocess ทั้งภาพถ่ายและภาพอ้างอิงเหมือนกัน (resize/gray/blur)</td><td><code>preprocess()</code></td><td><code>src/preprocessing.py</code></td></tr>
+          <tr><td>2</td><td>สกัด keypoints + descriptors ด้วย SIFT หรือ ORB จากทั้งสองภาพ</td><td><code>extract_features()</code></td><td><code>src/features.py</code></td></tr>
+          <tr><td>3</td><td>จับคู่ descriptors ด้วย BFMatcher (แม่นยำ) หรือ FLANN (เร็วกว่าสำหรับชุดใหญ่) แบบ knnMatch k=2</td><td><code>match_features()</code></td><td><code>src/features.py</code></td></tr>
+          <tr><td>4</td><td>กรองคู่จุดกำกวมออกด้วย Lowe's Ratio Test ตาม threshold ที่ตั้งไว้</td><td><code>apply_ratio_test()</code></td><td><code>src/features.py</code></td></tr>
+          <tr><td>5</td><td>รวมสเต็ป 2–4 เป็นฟังก์ชันเดียว คืน keypoints/matches/สถิติทั้งหมด</td><td><code>extract_and_match()</code></td><td><code>src/features.py</code></td></tr>
+          <tr><td>6</td><td>ประมาณ Homography ด้วย RANSAC จริง (threshold 5.0px, confidence 0.995) ตัด outlier ทิ้ง</td><td><code>compute_homography()</code></td><td><code>src/geometry.py</code></td></tr>
+          <tr><td>7</td><td>รวม Homography จาก RANSAC เข้ากับเมทริกซ์ scale ของภาพอ้างอิงและภาพถ่าย แล้ว warp ภาพต้นฉบับความละเอียดเต็มเป็น A4 พร้อมเช็คจำนวน inlier ขั้นต่ำ (≥10)</td><td><code>rectify_from_reference()</code></td><td><code>src/geometry.py</code></td></tr>
+        </tbody>
+      </table>
+      <div class="callout success">
+        <div class="ic">✅</div>
+        <div><strong>ยืนยันด้วยการรันจริง:</strong> ทดสอบคู่ภาพตัวอย่าง <code>ref1_skewed_photo.jpg</code> +
+        <code>ref1_flat_reference.jpg</code> ได้ 217 good matches หลัง ratio test และ RANSAC เหลือ 171 inliers (79%) — ดัดภาพสำเร็จ</div>
+      </div>
+    </section>
+
+    <section id="filters">
+      <h2><span class="num">6</span> ฟิลเตอร์ปรับปรุงเอกสาร 4 แบบ</h2>
+      <p class="subtitle">อยู่ใน Section 2 ใต้ผลลัพธ์ A4 — ปรับได้แบบเรียลไทม์ ไม่ต้องรัน pipeline ใหม่</p>
+      <figure class="shot">
+        <img src="docs/screenshots/03-bw-filter.png" alt="ตัวอย่างการเลือกฟิลเตอร์ Clean B&W">
+        <figcaption>ตัวอย่างการสลับไปฟิลเตอร์ “Clean B&amp;W (Scanner)” — พรีวิวอัปเดตทันที</figcaption>
+      </figure>
+      <table class="func">
+        <thead><tr><th>ฟิลเตอร์</th><th>ทำอะไร</th><th>ฟังก์ชันหลัก</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Original Color</strong></td>
+            <td>ภาพสีต้นฉบับ (ปรับ brightness/contrast เบื้องต้นได้จาก popover ปรับแต่งละเอียด)</td>
+            <td><code>apply_filter()</code> เส้นทาง else</td>
+          </tr>
+          <tr>
+            <td><strong>Magic Color (Auto Enhance)</strong></td>
+            <td>ลบเงาด้วย Division Normalization → เร่งคอนทราสต์เฉพาะช่อง Luminance ด้วย CLAHE ใน LAB space → ลับคมด้วย Unsharp Masking</td>
+            <td><code>enhance_magic_color()</code> (เรียก <code>remove_shadows()</code> ภายใน)</td>
+          </tr>
+          <tr>
+            <td><strong>Clean B&amp;W (Scanner)</strong></td>
+            <td>ลบเงาก่อน แล้วทำ Adaptive Gaussian Thresholding แปลงเป็นขาว-ดำคมชัด กรอง noise ด้วย Median Filter</td>
+            <td><code>enhance_clean_bw()</code></td>
+          </tr>
+          <tr>
+            <td><strong>Grayscale Scan</strong></td>
+            <td>ลบเงา แปลงเป็นเฉดเทา แล้วขยายช่วง contrast ด้วย CLAHE — เหมาะกับเอกสารลายมือ/ภาพประกอบ</td>
+            <td><code>enhance_grayscale()</code></td>
+          </tr>
+        </tbody>
+      </table>
+      <p>ทั้งหมดเรียกผ่านตัวจ่ายงานเดียวคือ <code>apply_filter(image_bgr, filter_mode, brightness, contrast, bw_threshold_c)</code>
+      ใน <code>src/enhancement.py</code> — ถ้าเกิด exception ระหว่างแต่งภาพ ฟังก์ชันจะดักไว้และคืนภาพต้นฉบับแทนเสมอ ไม่ทำให้แอปพัง</p>
+    </section>
+
+    <section id="manual-fallback">
+      <h2><span class="num">7</span> ปรับมุม 4 จุดด้วยตนเอง (Manual Corner Adjustment Fallback)</h2>
+      <p class="subtitle">ใช้เมื่อระบบตรวจจับขอบอัตโนมัติพลาด — เช่น มุมถูกบดบัง เงาทับขอบ หรือพื้นหลังกลืนสี</p>
+      <figure class="shot">
+        <img src="docs/screenshots/07-manual-corner-adjust.png" alt="แผงปรับพิกัด 4 มุมด้วยตนเอง พร้อมแถบเลื่อนและพรีวิว">
+        <figcaption>แผงนี้จะกางออกอัตโนมัติทันทีที่ตรวจจับอัตโนมัติล้มเหลว พร้อมพรีวิวกรอบสีเขียวแบบเรียลไทม์</figcaption>
+      </figure>
+      <ol class="steps">
+        <li>เลื่อนแถบ TL / TR / BR / BL (แกน X, Y) จนกรอบสีเขียวในพรีวิวล้อมรอบขอบเอกสารพอดี</li>
+        <li>กด <strong>“🔄 คำนวณและ Warp ใหม่ (Re-warp from Custom Corners)”</strong></li>
+        <li>ระบบจะเรียก <code>order_corners()</code> → <code>validate_quad()</code> → <code>rectify_from_corners()</code>
+        ชุดเดียวกับ pipeline อัตโนมัติ เพียงแต่ใช้พิกัดที่ปรับเอง</li>
+        <li>ผลลัพธ์จะติด badge สีม่วง “Homography จาก 4 มุมที่ปรับด้วยตนเอง (Manual Fallback)” ให้รู้ว่าไม่ใช่การตรวจจับอัตโนมัติ</li>
+      </ol>
+      <p>ฟังก์ชันเบื้องหลังแผงนี้คือ <code>render_manual_corner_adjustment()</code> ใน <code>app.py</code> — ใช้ได้ทั้งตอนตรวจจับอัตโนมัติล้มเหลว (กางค้างให้อัตโนมัติ)
+      และตอนอยากปรับละเอียดเพิ่มแม้ตรวจจับสำเร็จแล้วก็ตาม</p>
+    </section>
+
+    <section id="function-reference">
+      <h2><span class="num">8</span> ตารางฟังก์ชันอ้างอิงทั้งหมด</h2>
+      <p class="subtitle">แยกตามไฟล์ใน <code>src/</code> — ใช้เป็น index เวลาหาว่า “ฟังก์ชันนี้อยู่ไฟล์ไหน ทำอะไร เรียกจากตรงไหนบ้าง”</p>
+
+      <h3><code>src/preprocessing.py</code> — เตรียมภาพก่อนประมวลผล</h3>
+      <table class="func">
+        <thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr></thead>
+        <tbody>
+          <tr><td><code>preprocess(image)</code></td><td>ย่อภาพถ้าด้านยาวเกิน <code>MAX_DIM=1200</code>px, แปลง grayscale, Gaussian Blur 5×5, คืน dict <code>{resized, gray, blurred, scale}</code>. เรียกทุกครั้งก่อนเข้า detection/features ทั้งสองโหมด</td></tr>
+        </tbody>
+      </table>
+
+      <h3><code>src/detection.py</code> — หาขอบและ 4 มุมเอกสาร</h3>
+      <table class="func">
+        <thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr></thead>
+        <tbody>
+          <tr><td><code>detect_edges(blurred)</code></td><td>Canny แบบ adaptive threshold (อิง median ± 33%) + morphological closing 5×5 (2 รอบ) เพื่อปิดรอยขาดขอบกระดาษ</td></tr>
+          <tr><td><code>find_document_contour(edges, img_shape)</code></td><td>หา contour ที่ approx ได้ 4 จุด ให้คะแนนจากพื้นที่ × ความใกล้เคียงสัดส่วน A4 เลือกคะแนนสูงสุด มี fallback เป็น <code>minAreaRect</code> แล้ว fallback เป็นกรอบเต็มภาพ (fullframe) ตามลำดับ</td></tr>
+          <tr><td><code>order_corners(pts)</code></td><td>เรียง 4 จุดเป็น [TL, TR, BR, BL] ด้วยมุมรอบจุดศูนย์ถ่วง (<code>atan2</code>) — invariant ต่อลำดับ input และทนต่อกระดาษเอียง 45° (มีเทสยืนยันทั้งสองกรณี)</td></tr>
+          <tr><td><code>validate_quad(corners, img_shape, min_area_ratio=0.03)</code></td><td>ปฏิเสธ quad ที่มีจุดซ้ำ/ใกล้กันเกินไป, ไม่นูน (เว้า/ไขว้), หรือพื้นที่เล็กเกินไป ก่อนส่งไปคำนวณ Homography</td></tr>
+          <tr><td><code>detect_document(blurred, img_shape)</code></td><td>Pipeline หลักของโหมด Auto — รวม 4 ฟังก์ชันด้านบน คืน dict <code>{edges, corners, method, success, message}</code></td></tr>
+        </tbody>
+      </table>
+
+      <h3><code>src/features.py</code> — สกัดและจับคู่จุดเด่น</h3>
+      <table class="func">
+        <thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr></thead>
+        <tbody>
+          <tr><td><code>extract_features(img_gray, method="SIFT")</code></td><td>สกัด keypoints + descriptors ด้วย <code>cv2.SIFT_create</code> หรือ <code>cv2.ORB_create</code> (nfeatures=1000)</td></tr>
+          <tr><td><code>match_features(desc1, desc2, method, matcher)</code></td><td>จับคู่ descriptors ด้วย BFMatcher (NORM_L2 สำหรับ SIFT, NORM_HAMMING สำหรับ ORB) หรือ FLANN (KD-Tree/LSH) แบบ knnMatch k=2</td></tr>
+          <tr><td><code>apply_ratio_test(raw_matches, ratio=0.75)</code></td><td>Lowe's Ratio Test — เก็บเฉพาะคู่ที่ระยะ best match น้อยกว่า ratio เท่าของ second-best</td></tr>
+          <tr><td><code>extract_and_match(img1_gray, img2_gray, method, matcher, ratio)</code></td><td>รวมฟังก์ชันด้านบนทั้งหมดเป็น pipeline เดียว ใช้ในโหมด Reference</td></tr>
+        </tbody>
+      </table>
+
+      <h3><code>src/geometry.py</code> — Homography, RANSAC และการ Warp</h3>
+      <table class="func">
+        <thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr></thead>
+        <tbody>
+          <tr><td><code>get_a4_dimensions(base=800, landscape=False)</code></td><td>คำนวณ (width, height) ตามสัดส่วน A4 = 1:√2</td></tr>
+          <tr><td><code>quad_is_landscape(corners)</code></td><td>ดูจากความยาวด้านของ quad ว่าเอกสารเป็นแนวนอนหรือแนวตั้ง</td></tr>
+          <tr><td><code>compute_homography(src_pts, dst_pts)</code></td><td>คำนวณ Homography ด้วย RANSAC (threshold 5.0px, confidence 0.995, maxIters 2000) คืน (H, inlier mask)</td></tr>
+          <tr><td><code>corners_to_homography(corners, dst_size)</code></td><td>สร้าง exact 4-point transform จาก 4 มุม → กรอบผลลัพธ์ ด้วย <code>cv2.getPerspectiveTransform</code></td></tr>
+          <tr><td><code>warp_perspective(image, H, dst_size)</code></td><td>เรียก <code>cv2.warpPerspective</code> (INTER_CUBIC) จริง</td></tr>
+          <tr><td><code>rectify_from_corners(original, corners, scale, a4_base)</code></td><td>เส้นทางโหมด Auto ทั้งหมด: จาก 4 มุม → H → warp ภาพความละเอียดเต็ม → A4</td></tr>
+          <tr><td><code>rectify_from_reference(photo_original, photo_scale, reference_resized, feature_result, a4_base, min_inliers=10)</code></td><td>เส้นทางโหมด Reference ทั้งหมด: รวม H จาก RANSAC เข้ากับ scale matrix แล้ว warp เป็น A4 พร้อมเช็ค inlier ขั้นต่ำ</td></tr>
+          <tr><td><code>_is_usable(H)</code> <span class="pill" style="font-size:.68rem;">internal</span></td><td>กัน Homography ที่ degenerate หรือมี inf/NaN ไม่ให้หลุดไปถึง warp (ป้องกันภาพออกมาดำสนิท)</td></tr>
+        </tbody>
+      </table>
+
+      <h3><code>src/enhancement.py</code> — ปรับปรุงคุณภาพเอกสารหลัง Rectify</h3>
+      <table class="func">
+        <thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr></thead>
+        <tbody>
+          <tr><td><code>remove_shadows(image_bgr, kernel_size=35)</code></td><td>ประมาณระนาบแสงพื้นหลังด้วย Dilation+Median Blur แล้วทำ Division Normalization ลบเงา</td></tr>
+          <tr><td><code>enhance_magic_color(...)</code></td><td>ลบเงา → CLAHE บนช่อง L (LAB) → ปรับ brightness/contrast → Unsharp Masking</td></tr>
+          <tr><td><code>enhance_clean_bw(...)</code></td><td>ลบเงา → Adaptive Gaussian Threshold → Median denoise → คืนภาพขาว-ดำ 3 channel</td></tr>
+          <tr><td><code>enhance_grayscale(...)</code></td><td>ลบเงา → แปลงเทา → CLAHE ขยาย contrast</td></tr>
+          <tr><td><code>apply_filter(image_bgr, filter_mode, brightness, contrast, bw_threshold_c)</code></td><td>Router หลักที่ UI เรียกใช้ตรง ๆ ทุกครั้งที่ผู้ใช้สลับฟิลเตอร์หรือลากสไลเดอร์ปรับแต่ง</td></tr>
+        </tbody>
+      </table>
+
+      <h3><code>src/utils.py</code> — แปลงฟอร์แมตภาพและวาด visualization</h3>
+      <table class="func">
+        <thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr></thead>
+        <tbody>
+          <tr><td><code>pil_to_numpy_bgr()</code> / <code>numpy_bgr_to_pil()</code> / <code>numpy_gray_to_pil()</code></td><td>แปลงไป-กลับระหว่าง PIL Image (ที่ Streamlit ใช้แสดงผล) กับ numpy BGR/Gray (ที่ OpenCV ใช้ประมวลผล)</td></tr>
+          <tr><td><code>bytes_to_numpy_bgr(file_bytes)</code></td><td>แปลงไฟล์ที่อัปโหลดผ่าน <code>st.file_uploader</code> เป็น numpy array</td></tr>
+          <tr><td><code>draw_corners(image, corners, color, thickness, dot_radius)</code></td><td>วาดกรอบ + จุดมุม TL/TR/BR/BL สีต่างกันบนภาพ (ใช้ทั้งตอนแสดงผลและตอนพรีวิวปรับมุมมือ)</td></tr>
+          <tr><td><code>draw_matches_visualization(...)</code></td><td>วาดเส้นโยงคู่จุดที่ผ่าน ratio test ระหว่างภาพถ่ายกับภาพอ้างอิง</td></tr>
+          <tr><td><code>draw_keypoints(image, keypoints, max_draw=400)</code></td><td>วาด keypoints (วงกลม=scale, เส้น=orientation) สำหรับแผง Feature Extraction ในโหมด Auto</td></tr>
+          <tr><td><code>draw_inlier_outlier(...)</code></td><td>วาดจุด inlier (เขียว)/outlier (แดง) จาก RANSAC mask จริงเท่านั้น — คืน <code>None</code> ถ้าไม่มี mask จริง กันไม่ให้วาดจุดมั่ว</td></tr>
+          <tr><td><code>numpy_to_bytes_png(img)</code></td><td>แปลงภาพเป็น PNG bytes ให้ <code>st.download_button</code> ใช้งาน</td></tr>
+        </tbody>
+      </table>
+
+      <h3><code>app.py</code> — ฟังก์ชันระดับ UI/orchestration</h3>
+      <table class="func">
+        <thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr></thead>
+        <tbody>
+          <tr><td><code>_init_state()</code></td><td>ตั้งค่า default ให้ <code>st.session_state</code> ตอนแอปเริ่มทำงานครั้งแรก</td></tr>
+          <tr><td><code>render_stepper(current, steps)</code></td><td>วาดแถบ step indicator ด้านบน (Upload → Detect/Match → Rectify/RANSAC → Result)</td></tr>
+          <tr><td><code>render_manual_corner_adjustment(...)</code></td><td>แผงปรับพิกัด 4 มุมด้วยตนเอง (ดูหัวข้อ 7)</td></tr>
+          <tr><td><code>_metric(col, value, label)</code></td><td>วาด metric card เล็ก ๆ (เช่น จำนวน keypoints, inlier ratio) ใน Section 2</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="scripts">
+      <h2><span class="num">9</span> สคริปต์เสริม (scripts/)</h2>
+      <p class="subtitle">ไม่ใช่ส่วนของเว็บแอป แต่ใช้ช่วยพัฒนา/ตรวจสอบ — รันจาก command line</p>
+      <table class="func">
+        <thead><tr><th>ไฟล์</th><th>ใช้ทำอะไร</th></tr></thead>
+        <tbody>
+          <tr><td><code>scripts/benchmark_pipeline.py</code></td><td>วัด latency ของแต่ละสเต็ปทั้งสองโหมด (preprocess, detect, rectify, feature matching, RANSAC, filters) แล้วพิมพ์รายงาน FPS โดยประมาณ</td></tr>
+          <tr><td><code>scripts/verify_samples.py</code></td><td>รัน pipeline โหมด Auto ไล่ทุกไฟล์ใน <code>tests/sample_images/</code> (รวม edge cases) แล้วพิมพ์ success/method/message ของแต่ละไฟล์ พร้อมรันโหมด Reference กับคู่ <code>ref1</code></td></tr>
+          <tr><td><code>scripts/generate_edge_case_samples.py</code></td><td>สร้างภาพเอกสารจำลอง + Edge Cases (แสงเงา, พื้นหลังรก, มุมบัง ฯลฯ) เอาไว้ทดสอบระบบโดยไม่ต้องถ่ายภาพจริง — ภาพตัวอย่างในสกรีนช็อตของคู่มือนี้ก็มาจากสคริปต์นี้</td></tr>
+          <tr><td><code>scripts/create_pipeline_demo_notebook.py</code></td><td>สร้าง/คอมไพล์ไฟล์ <code>notebook/pipeline_demo.ipynb</code> ซึ่งเป็นสมุดโค้ดสำรองไว้สาธิต pipeline บน Colab หากเว็บแอปมีปัญหาระหว่างนำเสนอ</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="troubleshooting">
+      <h2><span class="num">10</span> แก้ปัญหาเบื้องต้น / Edge Cases</h2>
+      <figure class="shot">
+        <img src="docs/screenshots/06-edge-case-fail.png" alt="ตัวอย่างข้อความเตือนเมื่อระบบตรวจจับเอกสารไม่สำเร็จ">
+        <figcaption>ตัวอย่าง Edge Case 4 (มุมกระดาษถูกบดบัง) — ระบบรายงานตรง ๆ ว่าตรวจจับไม่สำเร็จ พร้อมภาพ Canny Edge Map ประกอบ แทนที่จะเดามั่ว ๆ</figcaption>
+      </figure>
+      <table class="func">
+        <thead><tr><th>อาการ</th><th>สาเหตุที่เป็นไปได้</th><th>วิธีแก้</th></tr></thead>
+        <tbody>
+          <tr><td>“ไม่พบขอบใด ๆ ในภาพ”</td><td>กระดาษกับพื้นหลังสีใกล้กันเกินไป (low contrast)</td><td>ถ่ายใหม่บนพื้นหลังสีตัดกัน หรือใช้โหมด Reference</td></tr>
+          <tr><td>“ไม่พบขอบเอกสารที่ชัดเจน — ระบบกำลังเดาด้วยกรอบเต็มภาพ”</td><td>ขอบกระดาษถูกบดบัง/เงาทับ ระบบเดาด้วย full-frame แต่ไม่ถือว่าสำเร็จ</td><td>ใช้แผงปรับมุม 4 จุดด้วยตนเอง (หัวข้อ 7) หรือถ่ายให้เห็นมุมครบ 4 มุม</td></tr>
+          <tr><td>“มุมที่ตรวจได้ซ้ำหรือใกล้กันเกินไป”</td><td>รูปทรงที่ตรวจเจอเสื่อมสภาพ (degenerate) มุมชิดกันมาก</td><td>ปรับมุมด้วยตนเอง หรือถ่ายมุมกล้องให้เห็นกระดาษเต็มแผ่นมากขึ้น</td></tr>
+          <tr><td>“กรอบที่ตรวจได้ไขว้กันเอง (ไม่เป็นรูปสี่เหลี่ยมนูน)”</td><td>ลำดับจุดผิดปกติหรือ 3 จุดเกือบอยู่บนเส้นตรงเดียวกัน</td><td>ปรับมุมด้วยตนเอง</td></tr>
+          <tr><td>โหมด Reference: “จับคู่จุดเด่นได้เพียง N คู่ (ต้องการอย่างน้อย 4)”</td><td>ภาพอ้างอิงกับภาพถ่ายอาจไม่ใช่เอกสารหน้าเดียวกัน หรือภาพเบลอ/ไม่มีลวดลายพอให้ SIFT จับ</td><td>ใช้ภาพอ้างอิงที่คมชัด เห็นตัวอักษร/ลวดลายชัดเจน และเป็นเอกสารหน้าเดียวกันจริง</td></tr>
+          <tr><td>โหมด Reference: “RANSAC ได้ inlier เพียง N จุด (ต้องการ ≥ 10)”</td><td>คู่จุดที่ผ่าน ratio test ส่วนใหญ่ไม่สอดคล้องกับระนาบเดียวกัน</td><td>ลด Lowe's Ratio Threshold ให้เข้มขึ้น (เช่น 0.7) หรือเปลี่ยนภาพอ้างอิง</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="tips">
+      <h2><span class="num">11</span> เคล็ดลับก่อนนำเสนอ / ข้อควรระวัง</h2>
+
+      <div class="callout warn">
+        <div class="ic">⚠️</div>
+        <div>
+          <strong>ปุ่ม “Download A4” ด้านบน (Section 1) อาจช้ากว่าหน้าจอ 1 จังหวะ</strong>
+          หลังสลับฟิลเตอร์ในหน้า Section 2 (เช่นจาก Original → Clean B&amp;W) พรีวิวบนจอจะอัปเดตถูกต้องทันที
+          แต่ถ้ากดปุ่ม <em>“Download A4”</em> ที่อยู่บนสุดของหน้าทันทีหลังสลับฟิลเตอร์ ไฟล์ที่ได้อาจยังเป็นฟิลเตอร์ก่อนหน้า
+          (ยืนยันด้วยการทดสอบจริงแล้วว่าเกิดขึ้นจริง เป็นเพราะลำดับการ re-render ของ Streamlit ไม่ใช่ปัญหาไฟล์เสีย) —
+          <strong>ให้ใช้ปุ่ม “📥 Download (ชื่อฟิลเตอร์)” ที่อยู่ใต้ภาพผลลัพธ์ใน Section 2 แทนเสมอ</strong> ปุ่มนั้นตรงกับภาพบนจอ 100%
+        </div>
+      </div>
+
+      <div class="callout warn">
+        <div class="ic">😴</div>
+        <div>
+          <strong>ถ้าใช้ลิงก์ Streamlit Cloud ตอนนำเสนอ:</strong> แอปจะเข้าโหมดพัก (sleep) เองถ้าไม่มีคนเข้าใช้งานนาน ๆ
+          แล้วขึ้นหน้า “Zzzz” ให้กดปลุก — <strong>เปิดลิงก์อุ่นเครื่องทิ้งไว้ก่อนวันนำเสนอ/วันตรวจอย่างน้อย 2–3 นาที</strong>
+          เพื่อไม่ให้กรรมการเข้าใจผิดว่าแอปพัง
+        </div>
+      </div>
+
+      <div class="callout tip">
+        <div class="ic">💡</div>
+        <div>
+          <strong>เตรียมสมุดโค้ดสำรอง:</strong> ถ้าอินเทอร์เน็ตหรือ Streamlit Cloud มีปัญหาระหว่างนำเสนอ ให้เปิด
+          <code>notebook/pipeline_demo.ipynb</code> บน Google Colab หรือเครื่อง local แทนได้ทันที ครอบคลุม pipeline ครบทุกขั้นตอน
+        </div>
+      </div>
+
+      <div class="callout tip">
+        <div class="ic">🧪</div>
+        <div>
+          <strong>ก่อนนำเสนอทุกครั้ง</strong> แนะนำให้รัน <code>python -m pytest -q</code> เพื่อยืนยันว่าทั้ง 91 automated tests
+          ยังผ่านหมด (ครอบคลุม detection, geometry, enhancement, preprocessing, features และ utils) — ถ้ามีใครแก้โค้ดล่าสุดแล้วลืมเทส
+          จะได้รู้ตัวก่อนขึ้นเวที ไม่ใช่ตอนสาธิตสด
+        </div>
+      </div>
+    </section>
+
+    <section id="faq">
+      <h2><span class="num">12</span> คำถามที่พบบ่อย (FAQ)</h2>
+
+      <details class="faq">
+        <summary>ทำไมโหมด Auto ถึงไม่มีตัวเลข RANSAC Inliers?</summary>
+        <p>เพราะโหมด Auto ไม่ได้ใช้ RANSAC เลย — Homography มาจาก 4 มุมที่ contour หาได้โดยตรงผ่าน
+        <code>cv2.getPerspectiveTransform</code> ถ้าอยากเห็นตัวเลข inlier จริงจาก RANSAC ต้องสลับไปโหมด Reference</p>
+      </details>
+
+      <details class="faq">
+        <summary>สกัด SIFT/ORB keypoints ในโหมด Auto ไปทำอะไร ถ้าไม่ได้เอาไปคำนวณ Homography?</summary>
+        <p>โชว์ให้เห็นขั้นตอน Feature Extraction เฉย ๆ (ตามเกณฑ์ต้องสาธิตให้เห็นว่าใช้ SIFT/ORB เป็น) แอปเขียนกำกับไว้ตรง ๆ
+        ใต้ภาพและใน badge ว่าไม่ได้เอาไปใช้ประมาณ H ในโหมดนี้ ถ้าต้องการเห็นเส้นทางที่ feature ถูกใช้จริง ให้ใช้โหมด Reference</p>
+      </details>
+
+      <details class="faq">
+        <summary>เลือก SIFT หรือ ORB ดี?</summary>
+        <p>SIFT แม่นยำและทนทานต่อการหมุน/สเกลมากกว่า เหมาะเป็นค่าเริ่มต้น ส่วน ORB เร็วกว่ามาก เหมาะถ้าต้องประมวลผลจำนวนมากหรือบนเครื่องที่ทรัพยากรจำกัด</p>
+      </details>
+
+      <details class="faq">
+        <summary>เลือก BFMatcher หรือ FLANN ดี? (โหมด Reference)</summary>
+        <p>BFMatcher เทียบทุกคู่ตรง ๆ แม่นยำกว่าเล็กน้อยแต่ช้ากว่าเมื่อ descriptor เยอะ FLANN ใช้โครงสร้างข้อมูลช่วยค้นหาจึงเร็วกว่าสำหรับชุดข้อมูลใหญ่ ผลลัพธ์ในทางปฏิบัติมักใกล้เคียงกัน</p>
+      </details>
+
+      <details class="faq">
+        <summary>ทำไมผลลัพธ์ถึงสลับเป็นแนวนอน/แนวตั้งเอง?</summary>
+        <p>ระบบตรวจสอบสัดส่วนด้านของ 4 มุมที่หาได้ (<code>quad_is_landscape()</code>) แล้วเลือกขนาด A4 แนวนอนหรือแนวตั้งให้อัตโนมัติ
+        เพื่อไม่ให้เอกสารแนวนอนถูกบีบลงกรอบแนวตั้งจนผิดสัดส่วน</p>
+      </details>
+
+      <details class="faq">
+        <summary>ไฟล์ผลลัพธ์ที่ดาวน์โหลดมา ความละเอียดเท่าไหร่?</summary>
+        <p>Warp มาจากภาพต้นฉบับความละเอียดเต็มเสมอ (ไม่ใช่ภาพที่ถูกย่อไว้ตอน detect ที่ 1200px) ขนาดสุดท้ายกำหนดจากสไลเดอร์
+        “Output Resolution” คูณสัดส่วน A4 (1:1.414)</p>
+      </details>
+
+    </section>
+
+    <p class="top-link"><a href="#">↑ กลับขึ้นด้านบน</a></p>
+  </main>
+</div>
+
+<footer>
+  คู่มือนี้เป็นส่วนหนึ่งของโปรเจกต์ <strong>Document Scanner &amp; Perspective Rectifier</strong> (CP461 Computer Vision) —
+  ดูรายละเอียดเพิ่มเติมใน <code>README.md</code> และประวัติการแก้ไขใน <code>CHANGELOG.md</code>
+</footer>
+
+<script>
+  (function(){
+    var root = document.documentElement;
+    var btn = document.getElementById('themeToggle');
+    var stored = null;
+    try { stored = localStorage.getItem('howto-theme'); } catch (e) {}
+    if (stored === 'light' || stored === 'dark') root.setAttribute('data-theme', stored);
+
+    btn.addEventListener('click', function(){
+      var current = root.getAttribute('data-theme');
+      var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var effectiveIsDark = current ? current === 'dark' : prefersDark;
+      var next = effectiveIsDark ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      try { localStorage.setItem('howto-theme', next); } catch (e) {}
+    });
+  })();
+</script>
+</body>
+</html>
