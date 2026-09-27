@@ -301,13 +301,6 @@ streamlit run app.py
 | **4** | นราธิป สุวณิชย์ | 67102010517 | **Enhancement Module, App Features & Documentation Lead** | • พัฒนาโมดูล `src/enhancement.py` สำหรับปรับปรุงคุณภาพภาพและ Smart Filter (F-13, F-14) พร้อมเขียนเทสต์ครอบคลุม<br>• แก้บั๊ก Encoding ของไฟล์ `requirements.txt`<br>• ปิดงานฟีเจอร์ที่เหลือทั้งหมด (F-09, F-11, F-12, F-19, F-20, F-21) และขยายความสามารถของ `app.py`<br>• ทำ Notebook Demo Pipeline, สคริปต์ Benchmark วัดประสิทธิภาพ และเพิ่มเทสต์โมดูล Detection/Geometry<br>• เขียนคู่มือการใช้งานแบบละเอียด (`howto.html`, `howtodemo.html`), เตรียมชุดภาพตัวอย่างสาธิต และอัปเดต README ให้ตรงกับโครงสร้างโปรเจกต์ปัจจุบัน |
 | **5** | พณพัฒน์ เขื่อนข่ายแก้ว | 67102010522 | **QA / Testing & Deployment Audit Lead** | • ตรวจสอบ Source Code และ Pipeline ตาม Spec, Review การ Deploy และจัดทำ Audit Report<br>• พัฒนา Unit Tests ด้วย pytest จำนวน 65 Test Case แบ่งเป็น 3 ไฟล์ (`test_preprocessing.py`, `test_features.py`, `test_utils.py`)<br>• รัน pytest ทั้งโปรเจกต์รวม 91 Tests และแก้ไขปัญหาความคลาดเคลื่อนของ ORB Keypoints ที่พบระหว่างการทดสอบ |
 
-### แผนการนำเสนอและการสาธิต 10 นาที (Presentation & Live Demo Structure)
-* **นาทีที่ 0:00 - 2:00 (กฤชตฤณ):** แนะนำหัวข้อ ที่มาของปัญหา Perspective Distortion, โครงสร้าง Repo และภาพรวม Core Pipeline เวอร์ชันตั้งต้น
-* **นาทีที่ 2:00 - 4:00 (กฤต):** โหมด Reference: SIFT/ORB + RANSAC หา Homography จริง, การแก้ไขการรายงานผล Detection และการรองรับเอกสารแนวนอน
-* **นาทีที่ 4:00 - 6:00 (ณัชพล):** ชุดข้อมูลทดสอบ Edge Cases และ Reference Pair, Dropdown เลือกภาพตัวอย่าง และสคริปต์ทดสอบอัตโนมัติ
-* **นาทีที่ 6:00 - 8:00 (นราธิป):** โมดูล Enhancement / Smart Filter, ฟีเจอร์เพิ่มเติมใน `app.py`, Notebook Demo และคู่มือการใช้งาน
-* **นาทีที่ 8:00 - 10:00 (พณพัฒน์):** Live Demo บน Streamlit Cloud, สรุปผล QA/Audit และผลการทดสอบ pytest ทั้ง 91 Tests
-
 ---
 
 ## ข้อมูลรายวิชาและลิขสิทธิ์ (Course Information & License)
