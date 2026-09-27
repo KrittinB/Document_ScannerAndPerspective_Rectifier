@@ -214,16 +214,45 @@ MODE_AUTO = "Auto — ภาพเดียว (Contour)"
 MODE_REF = "Reference — 2 ภาพ (SIFT + RANSAC)"
 
 SAMPLE_DIR = os.path.join(os.path.dirname(__file__), "tests", "sample_images")
+DEMO_DIR = os.path.join(os.path.dirname(__file__), "demo")
+
+
+def resolve_sample_path(filename: str | None) -> str | None:
+    """ค้นหาไฟล์ภาพตัวอย่างจากโฟลเดอร์ tests/sample_images และ demo/ ทุกหมวด"""
+    if not filename:
+        return None
+    search_dirs = [
+        SAMPLE_DIR,
+        DEMO_DIR,
+        os.path.join(DEMO_DIR, "01_Standard_Documents"),
+        os.path.join(DEMO_DIR, "02_Reference_Pairs"),
+        os.path.join(DEMO_DIR, "03_Edge_Cases"),
+    ]
+    for d in search_dirs:
+        p = os.path.join(d, filename)
+        if os.path.exists(p):
+            return p
+    return None
+
+
 SAMPLE_OPTIONS = {
     "— อัปโหลดไฟล์ภาพด้วยตนเอง (Upload Custom File) —": (None, None),
-    "📄 [Standard 1] เอกสาร A4 แนวนอน (test1.webp)": ("test1.webp", None),
-    "📄 [Standard 2] เอกสารมุมเฉียงองศาสูง (test2.webp)": ("test2.webp", None),
-    "🔍 [Reference Pair] ภาพถ่ายเอียง + ภาพอ้างอิงตรง (SIFT + RANSAC)": ("ref1_skewed_photo.jpg", "ref1_flat_reference.jpg"),
-    "⚡ [Edge Case 1] มุมมองเอียงรุนแรง (Extreme Perspective)": ("edge1_extreme_perspective.jpg", None),
-    "⚡ [Edge Case 2] แสงเงาทอดทับขอบกระดาษ (Heavy Shadow)": ("edge2_heavy_shadow.jpg", None),
-    "⚡ [Edge Case 3] พื้นหลังโต๊ะทำงานรก (Cluttered Background)": ("edge3_cluttered_background.jpg", None),
-    "⚡ [Edge Case 4] มุมกระดาษถูกบดบัง (Corner Occluded)": ("edge4_corner_occluded.jpg", None),
-    "⚡ [Edge Case 5] กระดาษสีกลืนกับพื้นผิว (Low Contrast)": ("edge5_low_contrast.jpg", None),
+    "📄 [Demo Standard 1] ใบเสร็จภาษีไทย Siam Vision (06_standard_thai_tax_invoice.jpg)": ("06_standard_thai_tax_invoice.jpg", None),
+    "📄 [Demo Standard 2] ใบกำกับภาษี Aurora Tech บนโต๊ะไม้ (01_standard_aurora_tax_invoice.jpg)": ("01_standard_aurora_tax_invoice.jpg", None),
+    "📄 [Demo Standard 3] ใบแจ้งหนี้ Apex Consulting บนโต๊ะไม้ (02_standard_apex_invoice.jpg)": ("02_standard_apex_invoice.jpg", None),
+    "📄 [Demo Standard 4] สัญญาธุรกิจ Business Agreement (03_standard_business_contract.jpg)": ("03_standard_business_contract.jpg", None),
+    "📄 [Demo Standard 5] บทความวิจัย Neural Networks (04_standard_research_paper.jpg)": ("04_standard_research_paper.jpg", None),
+    "📄 [Standard A4] เอกสาร A4 แนวนอน (test1.webp)": ("test1.webp", None),
+    "📄 [Standard A4] เอกสารมุมเฉียงองศาสูง (test2.webp)": ("test2.webp", None),
+    "🔍 [Demo Reference Pair 1] ใบเสร็จภาษีไทย Siam Vision (SIFT + RANSAC)": ("ref1_thai_invoice_skewed.jpg", "ref1_thai_invoice_flat.jpg"),
+    "🔍 [Demo Reference Pair 2] Aurora Tax Invoice (SIFT + RANSAC)": ("ref2_aurora_skewed.jpg", "ref2_aurora_flat.jpg"),
+    "🔍 [Demo Reference Pair 3] Apex Consulting Invoice (SIFT + RANSAC)": ("ref3_apex_skewed.jpg", "ref3_apex_flat.jpg"),
+    "🔍 [Demo Reference Pair 4] รายงานเทคนิค CP461 (SIFT + RANSAC)": ("ref1_skewed_photo.jpg", "ref1_flat_reference.jpg"),
+    "⚡ [Edge Case 1] แสงเงาทอดทับขอบกระดาษ (Heavy Shadow)": ("edge1_heavy_shadow.jpg", None),
+    "⚡ [Edge Case 2] พื้นหลังโต๊ะทำงานรก (Cluttered Background)": ("edge2_cluttered_desk.jpg", None),
+    "⚡ [Edge Case 3] มุมกระดาษถูกบดบัง (Corner Occluded)": ("edge3_corner_occluded.jpg", None),
+    "⚡ [Edge Case 4] กระดาษสีกลืนกับพื้นผิว (Low Contrast)": ("edge4_low_contrast.jpg", None),
+    "⚡ [Edge Case 5] มุมมองเอียงรุนแรง (Extreme Perspective)": ("edge5_extreme_perspective.jpg", None),
 }
 
 
@@ -376,8 +405,8 @@ with col_upload:
         st.session_state.result = None
         chosen_p, chosen_r = SAMPLE_OPTIONS[selected_sample]
         if chosen_p is not None:
-            p_path = os.path.join(SAMPLE_DIR, chosen_p)
-            if os.path.exists(p_path):
+            p_path = resolve_sample_path(chosen_p)
+            if p_path and os.path.exists(p_path):
                 st.session_state.uploaded_img = cv2.imread(p_path)
                 st.session_state.step = 1
         else:
@@ -385,8 +414,8 @@ with col_upload:
             st.session_state.step = 0
 
         if chosen_r is not None:
-            r_path = os.path.join(SAMPLE_DIR, chosen_r)
-            if os.path.exists(r_path):
+            r_path = resolve_sample_path(chosen_r)
+            if r_path and os.path.exists(r_path):
                 st.session_state.reference_img = cv2.imread(r_path)
         else:
             st.session_state.reference_img = None

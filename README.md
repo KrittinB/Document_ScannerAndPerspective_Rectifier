@@ -14,11 +14,13 @@ https://documentscannerandperspectiverectifier-ceuurr4pfg8wzjqzvrygv6.streamlit.
 
 
 ## สารบัญ (Table of Contents)
+- [คู่มือการใช้งานแบบละเอียด (howto.html)](./howto.html)
 - [ภาพรวมของระบบ (Overview)](#ภาพรวมของระบบ-overview)
 - [ฟีเจอร์หลักและการออกแบบ UI (Features & UI Design)](#ฟีเจอร์หลักและการออกแบบ-ui-features--ui-design)
 - [กระบวนการทำงาน (End-to-End Pipeline)](#กระบวนการทำงาน-end-to-end-pipeline)
 - [โครงสร้างโปรเจกต์ (Project Structure)](#โครงสร้างโปรเจกต์-project-structure)
 - [เทคโนโลยีที่ใช้ (Tech Stack)](#เทคโนโลยีที่ใช้-tech-stack)
+- [ผลการทดสอบประสิทธิภาพ (Performance Benchmark)](#ผลการทดสอบประสิทธิภาพ-performance-benchmark)
 - [การติดตั้งและรัน Local (Installation & Local Run)](#การติดตั้งและรัน-local-installation--local-run)
 - [การนำไปขึ้นคลาวด์ (Deployment)](#การนำไปขึ้นคลาวด์-deployment)
 - [ชุดข้อมูลทดสอบ (Test Dataset)](#ชุดข้อมูลทดสอบ-test-dataset)
@@ -159,11 +161,14 @@ https://documentscannerandperspectiverectifier-ceuurr4pfg8wzjqzvrygv6.streamlit.
 ```text
 document-scanner/
 ├── app.py                         # Web Application หลักพัฒนาด้วย Streamlit (UI, Filters, Pipeline Runner, Manual Fallback)
+├── howto.html                     # คู่มือการใช้งานแบบละเอียด (เปิดในเบราว์เซอร์ได้โดยตรง ไม่ต้องรันเซิร์ฟเวอร์)
 ├── requirements.txt               # รายการ Python dependencies (รองรับ Python 3.10+)
 ├── packages.txt                   # รายการ System packages สำหรับ Cloud Linux Environment (libgl1, libglib2.0-0)
 ├── README.md                      # เอกสารคู่มือการใช้งาน รายละเอียดโปรเจกต์ และ Task Allocation
 ├── CP461_document_scanner_spec.md # ข้อกำหนดทางเทคนิคและเกณฑ์โครงงาน CP461
 ├── CHANGELOG.md                   # บันทึกการอัปเดตและประวัติการแก้บั๊กอย่างละเอียด
+├── docs/
+│   └── screenshots/               # ภาพหน้าจอประกอบคู่มือ howto.html
 ├── src/
 │   ├── __init__.py                # Source package initialization
 │   ├── preprocessing.py           # ฟังก์ชันปรับขนาดรูป, แปลง Grayscale, และ Gaussian Blur
@@ -176,11 +181,16 @@ document-scanner/
 │   └── pipeline_demo.ipynb        # สมุดโค้ดสำรองสำหรับรันบน Colab/Local สาธิต Pipeline ครบ 12 ขั้นตอน (F-12)
 ├── scripts/
 │   ├── benchmark_pipeline.py      # สคริปต์ทดสอบและวัดค่า Latency/FPS การประมวลผลของระบบ
-│   └── create_pipeline_demo_notebook.py # สคริปต์สร้างและคอมไพล์ Jupyter Notebook
+│   ├── create_pipeline_demo_notebook.py # สคริปต์สร้างและคอมไพล์ Jupyter Notebook
+│   ├── generate_edge_case_samples.py    # สคริปต์สร้างชุดภาพทดสอบ Edge Cases และ Reference Pair จำลอง
+│   └── verify_samples.py                # สคริปต์รัน pipeline ไล่ทุกภาพใน sample_images/ แล้วพิมพ์ผลตรวจสอบ
 └── tests/
     ├── test_enhancement.py        # Automated unit tests สำหรับฟังก์ชัน Document Enhancement
     ├── test_geometry.py           # Automated unit tests สำหรับ Homography, มุม 45°, และ Ground Truth Rectification (F-11)
     ├── test_detection.py          # Automated unit tests สำหรับ Edge, Contour, และ Failure Handling (F-11)
+    ├── test_preprocessing.py      # Automated unit tests สำหรับ resize/grayscale/Gaussian Blur
+    ├── test_features.py           # Automated unit tests สำหรับ SIFT/ORB extraction, matching และ ratio test
+    ├── test_utils.py              # Automated unit tests สำหรับฟังก์ชันแปลง format ภาพและ visualization
     └── sample_images/             # ชุดภาพตัวอย่างทดสอบ ครอบคลุม Standard, Reference Pair และ Edge Cases
         ├── test1.webp             # ภาพเอกสารแนวนอนทั่วไป
         ├── test2.webp             # ภาพเอกสารมุมเอียงองศาสูง
@@ -189,17 +199,48 @@ document-scanner/
         └── edge1 - edge5 (.jpg)   # ภาพทดสอบกรณี Edge Cases (แสงเงา, พื้นหลังรก, มุมบัง ฯลฯ)
 ```
 
+> **อยากได้คู่มือแบบ step-by-step พร้อมภาพหน้าจอจริงและตารางฟังก์ชันทั้งหมด?**
+> เปิดไฟล์ [`howto.html`](./howto.html) ในเบราว์เซอร์ — อธิบายทุกปุ่ม ทุกโหมด และ mapping จากหน้าจอไปยังฟังก์ชันจริงใน `src/`
+
 ---
 
 ## เทคโนโลยีที่ใช้ (Tech Stack)
 
-- **ภาษาหลัก:** Python 3.10+
-- **Computer Vision Library:** OpenCV (`opencv-python-headless` เวอร์ชัน 4.x)
-- **การประมวลผลเชิงตัวเลขและเมทริกซ์:** NumPy
-- **การประมวลผลและจัดการไฟล์ภาพ:** Pillow (PIL)
-- **Web Application Framework:** Streamlit
+- **ภาษาหลัก:** Python 3.10+ (ตรวจสอบล่าสุดบน 3.11.9)
+- **Computer Vision Library:** OpenCV (`opencv-python-headless` — ตรวจสอบล่าสุดบนเวอร์ชัน 5.x)
+- **การประมวลผลเชิงตัวเลขและเมทริกซ์:** NumPy (ตรวจสอบล่าสุดบนเวอร์ชัน 2.x)
+- **การประมวลผลและจัดการไฟล์ภาพ:** Pillow / PIL (ตรวจสอบล่าสุดบนเวอร์ชัน 12.x)
+- **Web Application Framework:** Streamlit (ตรวจสอบล่าสุดบนเวอร์ชัน 1.64.x)
 - **ระบบปฏิบัติการเป้าหมาย:** Cross-platform (Windows, macOS, Linux / Docker)
 - **Version Control:** Git & GitHub
+
+> เวอร์ชันที่ระบุคือรอบตรวจสอบล่าสุด (27 ก.ย. 2026) — รันครบทั้ง 91 automated tests (`pytest`)
+> และรัน end-to-end ผ่านเบราว์เซอร์จริงทั้งโหมด Auto, Reference และ Edge Case ผ่านหมด ดูรายละเอียดเวอร์ชันที่แน่นอนใน `requirements.txt`
+
+---
+
+## ผลการทดสอบประสิทธิภาพ (Performance Benchmark)
+
+วัดผลด้วย `scripts/benchmark_pipeline.py` โดยรันบนภาพตัวอย่างจาก `tests/sample_images/` (เครื่อง Local, CPU-only, ไม่มี GPU acceleration):
+
+| ขั้นตอน | เวลาที่ใช้ | หมายเหตุ |
+|---|---:|---|
+| Preprocessing (Resize + Gray + Blur) | ~3.6 ms | |
+| Edge Detection + Contour + atan2 | ~2.1 ms | |
+| Perspective Warp (Auto, A4 1200px) | ~2.1 ms | |
+| **รวมโหมด Auto** | **~7.8 ms (~128 FPS)** | เร็วมาก เหมาะกับการใช้งาน Interactive |
+| Feature Extraction (SIFT) | ~16 ms | 491 keypoints |
+| Feature Extraction (ORB) | ~192 ms | 1000 keypoints (ช้ากว่า SIFT ในกรณีนี้เพราะจำนวน keypoints มากกว่า) |
+| SIFT + FLANN Matching + Ratio Test | ~176 ms | 218 good matches |
+| RANSAC Homography + Warp (Reference) | ~2.6 ms | 171/218 inliers |
+| **รวมโหมด Reference** (SIFT+FLANN) | **~178 ms** | ส่วนใหญ่หมดไปกับ Feature Extraction/Matching ไม่ใช่ RANSAC |
+| Enhancement — Original (Pass-through) | ~0.6 ms | |
+| Enhancement — Magic Color (Shadow Removal + LAB CLAHE) | ~154 ms | ขั้นตอนที่หนักที่สุดของ Enhancement |
+| Enhancement — Clean B&W | ~28 ms | |
+| Enhancement — Grayscale (CLAHE) | ~24 ms | |
+
+> ตัวเลขข้างต้นเป็นผลวัดจริงจากการรันสคริปต์ ไม่ใช่ค่าประมาณ — รันซ้ำได้ด้วยคำสั่ง `python scripts/benchmark_pipeline.py`
+> โหมด Auto เร็วพอสำหรับการโต้ตอบแบบ Real-time ส่วนโหมด Reference และฟิลเตอร์ Magic Color ใช้เวลานานกว่าเนื่องจากการคำนวณ Feature Matching และ CLAHE ที่มีความซับซ้อนสูงกว่า
 
 ---
 
@@ -280,18 +321,11 @@ streamlit run app.py
 
 | ลำดับ | ชื่อ - นามสกุล | รหัสนักศึกษา | บทบาทหน้าที่หลัก | รายละเอียดงานที่รับผิดชอบ |
 |:---:|---|:---:|---|---|
-| **1** | นาย/นางสาว [ชื่อ-นามสกุล สมาชิก 1] | [รหัส นศ.] | **Pipeline Architecture & Preprocessing Lead** | • ออกแบบ End-to-End Pipeline สถาปัตยกรรมรวมของระบบ<br>• พัฒนาโมดูล `src/preprocessing.py` (Resize, Grayscale, Gaussian Blur)<br>• พัฒนาระบบ Adaptive Canny Edge Detection และ Morphological Closing ขอบกระดาษ<br>• จัดทำสคริปต์ตรวจสอบความคมชัดของภาพ (Variance of Laplacian) |
-| **2** | นาย/นางสาว [ชื่อ-นามสกุล สมาชิก 2] | [รหัส นศ.] | **Contour & Geometric Rectification Lead** | • พัฒนาโมดูล `src/detection.py` ค้นหา Contour และระบบ Area/Aspect Scoring<br>• พัฒนาอัลกอริทึมจัดเรียง 4 มุมด้วยมุมรอบจุดศูนย์ถ่วง (`atan2`) ป้องกันจุดซ้ำมุม 45°<br>• ออกแบบระบบ Quad Validation คัดกรองจุดซ้อนและสี่เหลี่ยมเว้า<br>• พัฒนาการคำนวณ Homography Matrix และ Warp Perspective สัดส่วน A4 คมชัดสูง |
-| **3** | นาย/นางสาว [ชื่อ-นามสกุล สมาชิก 3] | [รหัส นศ.] | **Feature Extraction & RANSAC Specialist** | • พัฒนาโมดูล `src/features.py` รองรับ SIFT และ ORB Feature Detectors<br>• ออกแบบระบบจับคู่จุดเด่นด้วย BFMatcher และ FLANN (KNN Matching k=2)<br>• พัฒนา Lowe's Ratio Test กรองจุดเด่นที่กำกวม<br>• พัฒนาระบบประมาณค่า Homography ด้วย RANSAC และพล็อต Inlier/Outlier ในโหมด Reference |
-| **4** | นาย/นางสาว [ชื่อ-นามสกุล สมาชิก 4] | [รหัส นศ.] | **Enhancement & Smart Filters Lead** | • พัฒนาโมดูล `src/enhancement.py` ครบ 4 โหมด (Original, Magic Color, Clean B&W, Grayscale)<br>• พัฒนาอัลกอริทึมลบเงามือถือด้วย Morphological Background Division<br>• พัฒนาระบบเร่งคอนทราสต์ในระบบสี LAB ด้วย CLAHE และ Unsharp Masking<br>• ออกแบบระบบ Adaptive Gaussian Thresholding สำหรับเอกสารสแกนขาว-ดำ |
-| **5** | นาย/นางสาว [ชื่อ-นามสกุล สมาชิก 5] | [รหัส นศ.] | **Full-Stack UI/UX, Testing & DevOps Lead** | • พัฒนา Web Application บน Streamlit (`app.py`) พร้อม Stepper และ Visualizations<br>• พัฒนาระบบปรับแต่งพิกัด 4 มุมด้วยตนเอง (Manual Corner Adjustment Fallback F-09)<br>• พัฒนาชุดทดสอบ Unit Tests (`pytest`) ครอบคลุม Geometry, Detection และ Enhancement<br>• พัฒนาสมุดโค้ดสำรอง `notebook/pipeline_demo.ipynb` และดูแลการ Deploy ขึ้น Cloud |
-
-### แผนการนำเสนอและการสาธิต 10 นาที (Presentation & Live Demo Structure)
-* **นาทีที่ 0:00 - 2:00 (สมาชิก 1):** แนะนำหัวข้อ ที่มาของปัญหา Perspective Distortion และ Pipeline การเตรียมภาพเบื้องต้น (Preprocessing + Adaptive Canny)
-* **นาทีที่ 2:00 - 4:00 (สมาชิก 2):** เจาะลึกเทคนิค Contour Scoring, การจัดเรียงมุมด้วยจุดศูนย์ถ่วง (`atan2`), Quad Validation และการคำนวณ Homography
-* **นาทีที่ 4:00 - 6:00 (สมาชิก 3):** โหมด Reference: SIFT + FLANN Matching, Lowe's Ratio Test และ RANSAC Inlier/Outlier Estimation
-* **นาทีที่ 6:00 - 8:00 (สมาชิก 4):** การประมวลผลคุณภาพขั้นสูง (Post-Processing): การลบเงาด้วย Morphological Division และ Smart Filters ทั้ง 4 โหมด
-* **นาทีที่ 8:00 - 10:00 (สมาชิก 5):** Live Demo บน Streamlit Cloud ทดสอบกับ Edge Cases ทั้ง 5 แบบ และสาธิต Manual Corner Adjustment Fallback
+| **1** | กฤชตฤณ บุญสู่ | 67102010157 | **Project Setup & Core Pipeline Lead** | • สร้าง Repository และวางโครงสร้างโปรเจกต์เบื้องต้น<br>• พัฒนา Core CV Pipeline เวอร์ชันตั้งต้น<br>• สร้าง Prototype Web App เบื้องต้น<br>• ทดสอบและ Deploy เบื้องต้น |
+| **2** | กฤต ไหลไผ่ทอง | 67102010158 | **Reference Mode & Detection Robustness Lead** | • แก้ปัญหา Deploy พัง (`opencv-python` → `opencv-python-headless` + เพิ่ม `packages.txt`)<br>• พัฒนาโหมด Reference ใช้ SIFT/ORB + RANSAC หา Homography จริงจากภาพ 2 ใบ<br>• แก้ไขการรายงานผล Detection ให้ตรงตามจริง ไม่แจ้งว่า "สำเร็จ" เมื่อตรวจไม่พบเอกสาร<br>• แก้ไขการวาด Inlier/Outlier ให้ใช้ mask จริงจาก RANSAC<br>• เพิ่มการรองรับเอกสารแนวนอน และแก้ไขการเรียงมุม (`order_corners`) ป้องกันภาพดำเมื่อกระดาษเอียงมาก |
+| **3** | ณัชพล โพธิ์ตาดทอง | 67102010512 | **Test Dataset & Edge Case Specialist** | • สร้างชุดภาพทดสอบ Edge Cases (ถ่ายเอียงมาก, แสงเงาทับ, โต๊ะรก, นิ้วบังมุม, กระดาษกลืนกับโต๊ะ)<br>• สร้าง Reference Pair (ใบตรงคู่กับใบเอียง) สำหรับทดสอบและสาธิตโหมด SIFT + RANSAC<br>• เพิ่ม Dropdown เลือกรูปตัวอย่างในหน้าเว็บ<br>• เขียนสคริปต์ช่วยทดสอบรูปอัตโนมัติ เพื่อตรวจสอบว่าภาพทั้งหมดรันผ่าน Pipeline ได้โดยไม่พัง |
+| **4** | นราธิป สุวณิชย์ | 67102010517 | **Enhancement Module, App Features & Documentation Lead** | • พัฒนาโมดูล `src/enhancement.py` สำหรับปรับปรุงคุณภาพภาพและ Smart Filter (F-13, F-14) พร้อมเขียนเทสต์ครอบคลุม<br>• แก้บั๊ก Encoding ของไฟล์ `requirements.txt`<br>• ปิดงานฟีเจอร์ที่เหลือทั้งหมด (F-09, F-11, F-12, F-19, F-20, F-21) และขยายความสามารถของ `app.py`<br>• ทำ Notebook Demo Pipeline, สคริปต์ Benchmark วัดประสิทธิภาพ และเพิ่มเทสต์โมดูล Detection/Geometry<br>• เขียนคู่มือการใช้งานแบบละเอียด (`howto.html`, `howtodemo.html`), เตรียมชุดภาพตัวอย่างสาธิต และอัปเดต README ให้ตรงกับโครงสร้างโปรเจกต์ปัจจุบัน |
+| **5** | พณพัฒน์ เขื่อนข่ายแก้ว | 67102010522 | **QA / Testing & Deployment Audit Lead** | • ตรวจสอบ Source Code และ Pipeline ตาม Spec, Review การ Deploy และจัดทำ Audit Report<br>• พัฒนา Unit Tests ด้วย pytest จำนวน 65 Test Case แบ่งเป็น 3 ไฟล์ (`test_preprocessing.py`, `test_features.py`, `test_utils.py`)<br>• รัน pytest ทั้งโปรเจกต์รวม 91 Tests และแก้ไขปัญหาความคลาดเคลื่อนของ ORB Keypoints ที่พบระหว่างการทดสอบ |
 
 ---
 

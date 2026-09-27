@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="th" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>คู่มือการใช้ไฟล์เดโมบนหน้าเว็บ — Document Scanner &amp; Perspective Rectifier</title>
+  <meta name="description" content="คู่มือระบุวิธีใช้ไฟล์เดโมในแต่ละช่องบนหน้าเว็บ Streamlit สำหรับการสาธิต Live Demo CP461 ครบทั้งโหมด Auto, Reference (SIFT+RANSAC), และ Edge Cases">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@400;500;600;700;800&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --bg-alt: #111827;
+      --surface: #1e2538;
+      --surface-hover: #263047;
+      --surface-border: #2e3852;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --text-dim: #6b7280;
+      --primary: #6366f1;
+      --primary-light: #818cf8;
+      --primary-glow: rgba(99, 102, 241, 0.25);
+      --secondary: #06b6d4;
+      --accent: #ec4899;
+      --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.2);
+      --warning: #f59e0b;
+      --warning-glow: rgba(245, 158, 11, 0.2);
+      --danger: #ef4444;
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --shadow-sm: 0 2px 8px rgba(0,0,0,0.3);
+      --shadow-md: 0 8px 24px rgba(0,0,0,0.4);
+      --shadow-lg: 0 16px 40px rgba(0,0,0,0.5);
+      --font-body: 'Prompt', -apple-system, sans-serif;
+      --font-heading: 'Outfit', 'Prompt', sans-serif;
+      --font-mono: 'Fira Code', monospace;
+    }
+
+    [data-theme="light"] {
+      --bg: #f8fafc;
+      --bg-alt: #f1f5f9;
+      --surface: #ffffff;
+      --surface-hover: #f8fafc;
+      --surface-border: #e2e8f0;
+      --text: #0f172a;
+      --text-muted: #475569;
+      --text-dim: #94a3b8;
+      --primary: #4f46e5;
+      --primary-light: #6366f1;
+      --primary-glow: rgba(79, 70, 229, 0.15);
+      --secondary: #0891b2;
+      --accent: #db2777;
+      --success: #059669;
+      --success-glow: rgba(5, 150, 105, 0.15);
+      --warning: #d97706;
+      --warning-glow: rgba(217, 119, 6, 0.15);
+      --danger: #dc2626;
+      --shadow-sm: 0 2px 8px rgba(0,0,0,0.05);
+      --shadow-md: 0 8px 24px rgba(0,0,0,0.08);
+      --shadow-lg: 0 16px 40px rgba(0,0,0,0.12);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      line-height: 1.65;
+      font-size: 15px;
+      overflow-x: hidden;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    /* Top Sticky Navigation */
+    .navbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(17, 24, 39, 0.9);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--surface-border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    [data-theme="light"] .navbar {
+      background: rgba(255, 255, 255, 0.92);
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-family: var(--font-heading);
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: var(--text);
+      text-decoration: none;
+    }
+    .brand-badge {
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      color: #fff;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      list-style: none;
+    }
+    .nav-link {
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 0.88rem;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+    .nav-link:hover {
+      color: var(--text);
+      background: var(--surface);
+    }
+    .theme-toggle-btn {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-family: var(--font-body);
+      font-weight: 500;
+    }
+
+    .container {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 32px 24px 80px;
+    }
+
+    /* Hero Header */
+    .hero {
+      position: relative;
+      padding: 44px 36px;
+      border-radius: var(--radius-lg);
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.14) 0%, rgba(6, 182, 212, 0.09) 100%), var(--surface);
+      border: 1px solid var(--surface-border);
+      box-shadow: var(--shadow-md);
+      margin-bottom: 40px;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--primary-glow);
+      color: var(--primary-light);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+    .hero h1 {
+      font-family: var(--font-heading);
+      font-size: 2.2rem;
+      font-weight: 800;
+      line-height: 1.25;
+      margin-bottom: 14px;
+      letter-spacing: -0.02em;
+    }
+    .hero h1 span {
+      background: linear-gradient(135deg, #818cf8, #38bdf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero p.lead {
+      font-size: 1.05rem;
+      color: var(--text-muted);
+      max-width: 860px;
+      margin-bottom: 24px;
+    }
+
+    .quick-methods {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 20px;
+    }
+    @media (max-width: 768px) {
+      .quick-methods { grid-template-columns: 1fr; }
+    }
+    .method-card {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+    }
+    [data-theme="light"] .method-card {
+      background: rgba(255, 255, 255, 0.7);
+    }
+    .method-title {
+      font-family: var(--font-heading);
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--primary-light);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Section Styles */
+    .section {
+      margin-bottom: 56px;
+      scroll-margin-top: 80px;
+    }
+    .section-header {
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--surface-border);
+      padding-bottom: 14px;
+    }
+    .section-title {
+      font-family: var(--font-heading);
+      font-size: 1.45rem;
+      font-weight: 700;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-desc {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Mock Web UI Diagram */
+    .mock-ui {
+      background: var(--surface);
+      border: 2px solid var(--surface-border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: var(--shadow-lg);
+      margin-bottom: 32px;
+    }
+    .mock-header {
+      background: var(--bg-alt);
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--surface-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .mock-dots {
+      display: flex;
+      gap: 6px;
+    }
+    .mock-dots span {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: #374151;
+    }
+    .mock-dots span:nth-child(1) { background: #ef4444; }
+    .mock-dots span:nth-child(2) { background: #f59e0b; }
+    .mock-dots span:nth-child(3) { background: #10b981; }
+    .mock-url {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      background: var(--surface);
+      padding: 4px 18px;
+      border-radius: 999px;
+      border: 1px solid var(--surface-border);
+    }
+
+    .mock-body {
+      padding: 24px;
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 24px;
+    }
+    @media (max-width: 900px) {
+      .mock-body { grid-template-columns: 1fr; }
+    }
+
+    .mock-pane {
+      background: var(--bg);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      position: relative;
+    }
+    .mock-pane-title {
+      font-family: var(--font-heading);
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ui-callout {
+      border: 2px dashed var(--primary);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      background: var(--primary-glow);
+      margin-bottom: 16px;
+      position: relative;
+    }
+    .callout-tag {
+      position: absolute;
+      top: -11px;
+      left: 12px;
+      background: var(--primary);
+      color: #fff;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .callout-content {
+      margin-top: 4px;
+      font-size: 0.88rem;
+      color: var(--text);
+    }
+    .callout-content strong {
+      color: var(--primary-light);
+    }
+
+    /* Cheat Sheet Table */
+    .table-container {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius-md);
+      overflow-x: auto;
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 24px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.88rem;
+    }
+    th, td {
+      padding: 13px 16px;
+      border-bottom: 1px solid var(--surface-border);
+      vertical-align: middle;
+    }
+    th {
+      background: var(--bg-alt);
+      font-family: var(--font-heading);
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface-hover); }
+
+    .tag-mode {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      text-transform: uppercase;
+    }
+    .tag-auto { background: rgba(16, 185, 129, 0.2); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.4); }
+    .tag-ref { background: rgba(99, 102, 241, 0.25); color: var(--primary-light); border: 1px solid rgba(99, 102, 241, 0.4); }
+    .tag-edge { background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.4); }
+
+    /* Scene Detailed Cards */
+    .scene-card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s ease;
+    }
+    .scene-card:hover {
+      border-color: var(--primary);
+      box-shadow: var(--shadow-md);
+    }
+    .scene-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--surface-border);
+      padding-bottom: 12px;
+    }
+    .scene-title {
+      font-family: var(--font-heading);
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .scene-badge {
+      background: var(--bg-alt);
+      color: var(--text-muted);
+      border: 1px solid var(--surface-border);
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+
+    .scene-grid {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+    @media (max-width: 850px) {
+      .scene-grid { grid-template-columns: 1fr; }
+    }
+
+    .scene-image-preview {
+      background: var(--bg-alt);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      position: relative;
+    }
+    .scene-image-preview img {
+      width: 100%;
+      height: 220px;
+      object-fit: cover;
+      display: block;
+    }
+    .scene-pair-preview {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      background: var(--bg-alt);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius-md);
+      padding: 8px;
+    }
+    .scene-pair-preview img {
+      width: 100%;
+      height: 150px;
+      object-fit: cover;
+      border-radius: var(--radius-sm);
+    }
+    .pair-label {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      text-align: center;
+      margin-top: 4px;
+      font-weight: 600;
+    }
+
+    .scene-instructions {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .instruction-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 0.9rem;
+    }
+    .step-num {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.8rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .step-content {
+      flex: 1;
+      color: var(--text);
+    }
+    .step-content strong {
+      color: var(--primary-light);
+    }
+
+    .file-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg-alt);
+      border: 1px solid var(--surface-border);
+      padding: 3px 10px;
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      color: var(--text);
+      margin: 4px 0;
+    }
+    .btn-copy {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      padding: 2px 4px;
+      border-radius: 4px;
+      transition: color 0.2s ease;
+    }
+    .btn-copy:hover {
+      color: var(--primary-light);
+    }
+
+    .point-box {
+      margin-top: 8px;
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      background: rgba(6, 182, 212, 0.08);
+      border-left: 3px solid var(--secondary);
+      font-size: 0.84rem;
+      color: var(--text-muted);
+    }
+    .point-box strong {
+      color: var(--secondary);
+    }
+
+    /* Toast Notification */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--primary);
+      padding: 12px 20px;
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-lg);
+      font-size: 0.88rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 1000;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    footer {
+      border-top: 1px solid var(--surface-border);
+      padding: 32px 24px;
+      text-align: center;
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      background: var(--bg-alt);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Sticky Navigation -->
+  <nav class="navbar">
+    <a href="#" class="nav-brand">
+      <span class="brand-badge">DEMO GUIDE</span>
+      Document Scanner &amp; Perspective Rectifier
+    </a>
+    <ul class="nav-links">
+      <li><a href="#mapping" class="nav-link">🗺 แผนที่ช่องบนเว็บ</a></li>
+      <li><a href="#cheatsheet" class="nav-link">📋 ตารางสรุปไฟล์</a></li>
+      <li><a href="#scenes" class="nav-link">🎬 ขั้นตอนคลิก 6 เคส</a></li>
+    </ul>
+    <button class="theme-toggle-btn" id="themeToggle" type="button">🌓 สลับธีม</button>
+  </nav>
+
+  <div class="container">
+
+    <!-- Hero Header -->
+    <header class="hero">
+      <div class="hero-badge">⚡ วิธีจับคู่ไฟล์เข้ากับหน้าเว็บ Streamlit สำหรับการ Demo จริง</div>
+      <h1>เวลา Demo บนเว็บ <span>ต้องใช้ไฟล์ไหน? ใส่ตรงช่องไหน?</span></h1>
+      <p class="lead">
+        หน้านี้สรุปให้เห็นอย่างชัดเจนที่สุดว่าในแต่ละสถานการณ์การนำเสนอ คุณต้องเลือกโหมดอะไร, ใช้ไฟล์รูปภาพใดจากโฟลเดอร์ <code style="color:var(--primary-light);">demo/</code>, 
+        ต้องอัปโหลดใส่ช่องไหนบนหน้าจอ, และต้องปรับตั้งค่าหรือกดปุ่มอะไรบ้าง เพื่อให้การพรีเซนต์ราบรื่นและได้คะแนนเต็ม 10/10
+      </p>
+
+      <div class="quick-methods">
+        <div class="method-card">
+          <div class="method-title">✨ วิธีที่ 1: เลือกผ่าน Dropdown ในเว็บ (แนะนำที่สุด — เร็วสุด)</div>
+          <p style="font-size:0.86rem; color:var(--text-muted);">
+            บนหน้าเว็บมีเมนู Dropdown <strong>"ชุดภาพตัวอย่างทดสอบ"</strong> ที่เชื่อมต่อกับโฟลเดอร์ <code>demo/</code> แล้ว คุณเพียงแค่คลิกเลือกชื่อภาพ ระบบจะดึงไฟล์และตั้งค่าโหมดให้อัตโนมัติในคลิกเดียวโดยไม่ต้องเปิดโฟลเดอร์
+          </p>
+        </div>
+        <div class="method-card">
+          <div class="method-title">📂 วิธีที่ 2: กดปุ่ม Browse แล้วเลือกไฟล์จาก demo/</div>
+          <p style="font-size:0.86rem; color:var(--text-muted);">
+            หากต้องการสาธิตการอัปโหลดไฟล์ด้วยตนเอง ให้กดปุ่ม <strong>"Browse files"</strong> แล้วเลือกภาพจากโฟลเดอร์ <code>d:\Document_ScannerAndPerspective_Rectifier\demo\</code> ตามตารางด้านล่างได้ทันที
+          </p>
+        </div>
+      </div>
+    </header>
+
+    <!-- Section 1: Mock Web UI & Slot Mapping -->
+    <section class="section" id="mapping">
+      <div class="section-header">
+        <h2 class="section-title">🗺 แผนที่ช่องบนหน้าเว็บ Streamlit (Web UI Slots)</h2>
+        <p class="section-desc">ทำความเข้าใจว่าแต่ละช่องบนหน้าจอแอปพลิเคชันทำหน้าที่อะไร และรองรับไฟล์ประเภทไหน</p>
+      </div>
+
+      <div class="mock-ui">
+        <div class="mock-header">
+          <div class="mock-dots"><span></span><span></span><span></span></div>
+          <div class="mock-url">http://localhost:8501 · Smart Document Scanner</div>
+          <div style="font-size:0.75rem; color:var(--text-dim);">Section 1: Upload &amp; Settings</div>
+        </div>
+
+        <div class="mock-body">
+          <!-- Left Column: Upload Area -->
+          <div class="mock-pane">
+            <div class="mock-pane-title">⬅️ ฝั่งซ้าย: Input Document Image (ช่องอัปโหลด)</div>
+
+            <div class="ui-callout" style="border-color:var(--primary);">
+              <span class="callout-tag">ช่องที่ 1: Dropdown ด่วน</span>
+              <div class="callout-content">
+                <strong>ชุดภาพตัวอย่างทดสอบ (Sample / Edge Cases)</strong><br>
+                เลือกชื่อเคสได้เลย เช่น <code>📄 [Demo Standard 1]</code> หรือ <code>🔍 [Demo Reference Pair 1]</code><br>
+                <em>(ถ้าเลือกตรงนี้ ระบบจะโหลดรูปให้อัตโนมัติทันที ไม่ต้องกด Browse)</em>
+              </div>
+            </div>
+
+            <div class="ui-callout" style="border-color:var(--secondary);">
+              <span class="callout-tag" style="background:var(--secondary);">ช่องที่ 2: Upload หลัก (ทุกโหมด)</span>
+              <div class="callout-content">
+                <strong>หรืออัปโหลดภาพถ่ายเอกสารของคุณเอง (JPG, PNG, WEBP)</strong><br>
+                👉 <strong>ใส่ไฟล์:</strong> ภาพถ่ายเอกสารจากกล้องมือถือที่เอียง หรือภาพมุมมองธรรมชาติ<br>
+                <em>(เช่น <code>01_aurora_tax_invoice.jpg</code>, <code>06_thai_tax_invoice_photo.jpg</code>, <code>edge1-edge5</code>)</em>
+              </div>
+            </div>
+
+            <div class="ui-callout" style="border-color:var(--accent);">
+              <span class="callout-tag" style="background:var(--accent);">ช่องที่ 3: Upload ภาพอ้างอิง (เฉพาะโหมด Reference)</span>
+              <div class="callout-content">
+                <strong>อัปโหลดภาพเอกสารอ้างอิงที่แบนราบ (Reference Image)</strong><br>
+                <em>(ช่องนี้จะแสดงเฉพาะเมื่อคุณเลือก <strong>"โหมด Reference"</strong> เท่านั้น)</em><br>
+                👉 <strong>ใส่ไฟล์:</strong> ภาพเอกสารตรง/แบนราบที่สแกนมา หน้าเดียวกันกับช่องที่ 2<br>
+                <em>(เช่น <code>pair1_thai_tax_invoice_flat.jpg</code> หรือ <code>pair2_aurora_invoice_flat.jpg</code>)</em>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Settings Area -->
+          <div class="mock-pane">
+            <div class="mock-pane-title">➡️ ฝั่งขวา: Pipeline Settings (การตั้งค่า)</div>
+
+            <div class="ui-callout" style="border-color:var(--success);">
+              <span class="callout-tag" style="background:var(--success);">การเลือกโหมด (Radio Button)</span>
+              <div class="callout-content">
+                ⚪ <strong>Auto — ภาพเดียว (Contour):</strong> ใช้รูปเดียว หามุมด้วย Canny + Contour<br>
+                ⚪ <strong>Reference — 2 ภาพ (SIFT + RANSAC):</strong> ใช้รูปคู่ จับคู่ด้วย SIFT + RANSAC
+              </div>
+            </div>
+
+            <div class="ui-callout" style="border-color:var(--warning);">
+              <span class="callout-tag" style="background:var(--warning);">การตั้งค่า Feature (สำหรับโหมด Reference)</span>
+              <div class="callout-content">
+                • <strong>Feature Extractor:</strong> เลือก <code>SIFT</code> (หรือ <code>ORB</code>)<br>
+                • <strong>Matcher:</strong> เลือก <code>BFMatcher</code> (หรือ <code>FLANN</code>)<br>
+                • <strong>Lowe's Ratio Threshold:</strong> สไลเดอร์ตั้งไว้ที่ <code>0.75</code>
+              </div>
+            </div>
+
+            <div class="ui-callout" style="border-color:var(--primary); background:rgba(99,102,241,0.15);">
+              <span class="callout-tag">ปุ่มแอคชันหลัก</span>
+              <div class="callout-content" style="text-align:center; padding:6px 0;">
+                <button class="btn btn-primary" style="pointer-events:none; width:100%; justify-content:center;">
+                  🚀 Run Scan Pipeline
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 2: Cheat Sheet Table -->
+    <section class="section" id="cheatsheet">
+      <div class="section-header">
+        <h2 class="section-title">📋 ตารางสรุป: อยากเดโมอะไร? ใช้ไฟล์ไหน? ใส่ช่องไหน?</h2>
+        <p class="section-desc">สรุปครบทุกการเดโมแบบย่อ หยิบไปใช้ได้ทันทีตอนพรีเซนต์</p>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>สถานการณ์ที่ต้องการ Demo</th>
+              <th>ต้องปรับโหมดเป็น</th>
+              <th>ช่องที่ 1: Input Document Image</th>
+              <th>ช่องที่ 2: Reference Image</th>
+              <th>ผลลัพธ์ &amp; จุดที่ต้องชี้</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>1. สแกนใบกำกับภาษีภาษาอังกฤษ (Auto)</strong></td>
+              <td><span class="tag-mode tag-auto">Auto</span></td>
+              <td>
+                <span class="file-chip">01_aurora_tax_invoice.jpg</span>
+                <button class="btn-copy" onclick="copyText('01_aurora_tax_invoice.jpg')">📋</button>
+              </td>
+              <td style="color:var(--text-dim); font-style:italic;">— ไม่ต้องใส่ —</td>
+              <td>ตรวจจับ 4 มุม Contour สมบูรณ์ ดัดตรง A4 ทันที</td>
+            </tr>
+            <tr>
+              <td><strong>2. สแกนใบเสร็จภาษีไทย Siam Vision (Auto)</strong></td>
+              <td><span class="tag-mode tag-auto">Auto</span></td>
+              <td>
+                <span class="file-chip">06_thai_tax_invoice_photo.jpg</span>
+                <button class="btn-copy" onclick="copyText('06_thai_tax_invoice_photo.jpg')">📋</button>
+              </td>
+              <td style="color:var(--text-dim); font-style:italic;">— ไม่ต้องใส่ —</td>
+              <td>เอกสารไทย A4 แนวตั้ง ดัดมุมมองและตัวหนังสือคมชัด</td>
+            </tr>
+            <tr>
+              <td><strong>3. สแกนบทความวิชาการ/สูตรเลข (Auto)</strong></td>
+              <td><span class="tag-mode tag-auto">Auto</span></td>
+              <td>
+                <span class="file-chip">04_academic_research_paper.jpg</span>
+                <button class="btn-copy" onclick="copyText('04_academic_research_paper.jpg')">📋</button>
+              </td>
+              <td style="color:var(--text-dim); font-style:italic;">— ไม่ต้องใส่ —</td>
+              <td>โชว์สูตรและกราฟ จากนั้นเลือกฟิลเตอร์ Clean B&amp;W</td>
+            </tr>
+            <tr style="background:rgba(99,102,241,0.06);">
+              <td><strong>4. SIFT + RANSAC ใบเสร็จไทย (เกณฑ์หลัก)</strong></td>
+              <td><span class="tag-mode tag-ref">Reference</span></td>
+              <td>
+                <span class="file-chip">pair1_thai_tax_invoice_skewed.jpg</span>
+                <button class="btn-copy" onclick="copyText('pair1_thai_tax_invoice_skewed.jpg')">📋</button>
+              </td>
+              <td>
+                <span class="file-chip">pair1_thai_tax_invoice_flat.jpg</span>
+                <button class="btn-copy" onclick="copyText('pair1_thai_tax_invoice_flat.jpg')">📋</button>
+              </td>
+              <td><strong>เส้นเขียว Inliers 120 คู่ (81.6%)</strong> เมทริกซ์ H 3x3</td>
+            </tr>
+            <tr style="background:rgba(99,102,241,0.06);">
+              <td><strong>5. SIFT + RANSAC ใบแจ้งหนี้ Apex (คู่ฮิต)</strong></td>
+              <td><span class="tag-mode tag-ref">Reference</span></td>
+              <td>
+                <span class="file-chip">pair3_apex_invoice_skewed.jpg</span>
+                <button class="btn-copy" onclick="copyText('pair3_apex_invoice_skewed.jpg')">📋</button>
+              </td>
+              <td>
+                <span class="file-chip">pair3_apex_invoice_flat.jpg</span>
+                <button class="btn-copy" onclick="copyText('pair3_apex_invoice_flat.jpg')">📋</button>
+              </td>
+              <td><strong>Inliers 247 คู่ (78.9%)</strong> เส้นจับคู่หนาแน่นมาก</td>
+            </tr>
+            <tr>
+              <td><strong>6. ทดสอบแสงเงาทับกระดาษ (Edge Case 1)</strong></td>
+              <td><span class="tag-mode tag-auto">Auto</span></td>
+              <td>
+                <span class="file-chip">edge1_heavy_shadow.jpg</span>
+                <button class="btn-copy" onclick="copyText('edge1_heavy_shadow.jpg')">📋</button>
+              </td>
+              <td style="color:var(--text-dim); font-style:italic;">— ไม่ต้องใส่ —</td>
+              <td>ขึ้น Fallback แจ้งเตือน → เปิด Manual Adjustment</td>
+            </tr>
+            <tr>
+              <td><strong>7. ทดสอบโต๊ะทำงานรก (Edge Case 2)</strong></td>
+              <td><span class="tag-mode tag-auto">Auto</span></td>
+              <td>
+                <span class="file-chip">edge2_cluttered_desk.jpg</span>
+                <button class="btn-copy" onclick="copyText('edge2_cluttered_desk.jpg')">📋</button>
+              </td>
+              <td style="color:var(--text-dim); font-style:italic;">— ไม่ต้องใส่ —</td>
+              <td>ระบบใช้ Fallback <code>minAreaRect</code> ตีกรอบสำเร็จ ไม่แครช</td>
+            </tr>
+            <tr>
+              <td><strong>8. ทดสอบมุมถูกแก้วกาแฟทับ (Edge Case 3)</strong></td>
+              <td><span class="tag-mode tag-auto">Auto</span></td>
+              <td>
+                <span class="file-chip">edge3_corner_occluded.jpg</span>
+                <button class="btn-copy" onclick="copyText('edge3_corner_occluded.jpg')">📋</button>
+              </td>
+              <td style="color:var(--text-dim); font-style:italic;">— ไม่ต้องใส่ —</td>
+              <td>โชว์ฟีเจอร์ลากจุดมุม BR หลบแก้วกาแฟด้วยมือ</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Section 3: Step-by-Step Scenes -->
+    <section class="section" id="scenes">
+      <div class="section-header">
+        <h2 class="section-title">🎬 ขั้นตอนคลิกและวิธีใช้ไฟล์ในแต่ละฉาก (Scene-by-Scene Guide)</h2>
+        <p class="section-desc">ทำตามทีละข้อได้อย่างแม่นยำ พร้อมพรีวิวรูปภาพจริงประกอบ</p>
+      </div>
+
+      <!-- Scene 1 -->
+      <div class="scene-card">
+        <div class="scene-header">
+          <div class="scene-title">
+            <span class="tag-mode tag-auto">Auto Mode</span>
+            ฉากที่ 1: การสแกนเอกสารมาตรฐานทั่วไป (Single Image Scan)
+          </div>
+          <span class="scene-badge">เวลาแนะนำ: 1.5 - 2 นาทีแรก</span>
+        </div>
+
+        <div class="scene-grid">
+          <div class="scene-image-preview">
+            <img src="demo/01_Standard_Documents/01_aurora_tax_invoice.jpg" alt="Aurora Tax Invoice">
+            <div style="padding:8px 12px; font-size:0.78rem; color:var(--text-muted);">
+              ไฟล์: <code>demo/01_Standard_Documents/01_aurora_tax_invoice.jpg</code>
+            </div>
+          </div>
+
+          <div class="scene-instructions">
+            <div class="instruction-step">
+              <span class="step-num">1</span>
+              <div class="step-content">
+                ที่ฝั่งขวา เลือก Radio Button: <strong>"Auto — ภาพเดียว (Contour)"</strong>
+              </div>
+            </div>
+            <div class="instruction-step">
+              <span class="step-num">2</span>
+              <div class="step-content">
+                ที่ฝั่งซ้าย เลือก Dropdown: <strong>"📄 [Demo Standard 2] ใบกำกับภาษี Aurora Tech บนโต๊ะไม้"</strong><br>
+                <em>(หรือกดปุ่ม Browse files แล้วเลือก <code>01_aurora_tax_invoice.jpg</code>)</em>
+              </div>
+            </div>
+            <div class="instruction-step">
+              <span class="step-num">3</span>
+              <div class="step-content">
+                ชี้ให้เห็นว่าระบบวาดกรอบสีเขียวรอบ 4 มุมของเอกสารทันที
+              </div>
+            </div>
+            <div class="instruction-step">
+              <span class="step-num">4</span>
+              <div class="step-content">
+                กดปุ่ม <strong>"🚀 Run Scan Pipeline"</strong>
+              </div>
+            </div>
+            <div class="point-box">
+              <strong>จุดที่ต้องพูดกับอาจารย์:</strong> ชี้ให้เห็นว่าระบบคำนวณ Perspective Transform ดัดมุมมองเป็นสัดส่วน A4 ได้ตรงเป๊ะ จากนั้นคลิกแท็บฟิลเตอร์ <strong>"Magic Color"</strong> เพื่อโชว์การลบเงาและเร่งความสดใสของตัวหนังสือ
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 2 (The Heart of the Project) -->
+      <div class="scene-card" style="border-color:rgba(99,102,241,0.5); background:linear-gradient(180deg, var(--surface) 0%, rgba(99,102,241,0.04) 100%);">
+        <div class="scene-header">
+          <div class="scene-title">
+            <span class="tag-mode tag-ref">Reference Mode</span>
+            ฉากที่ 2: หัวใจสำคัญของวิชา — SIFT + BFMatcher + RANSAC (โหมด 2 ภาพ)
+          </div>
+          <span class="scene-badge" style="background:var(--primary-glow); color:var(--primary-light); border-color:var(--primary);">
+            ⭐ คะแนนหลัก 4.0 Pts
+          </span>
+        </div>
+
+        <div class="scene-grid">
+          <div>
+            <div class="scene-pair-preview">
+              <div>
+                <img src="demo/02_Reference_Pairs/pair1_thai_tax_invoice_skewed.jpg" alt="Skewed Photo">
+                <div class="pair-label">ช่องที่ 1: ภาพถ่ายเอียง</div>
+              </div>
+              <div>
+                <img src="demo/02_Reference_Pairs/pair1_thai_tax_invoice_flat.jpg" alt="Flat Reference">
+                <div class="pair-label">ช่องที่ 2: ภาพอ้างอิงตรง</div>
+              </div>
+            </div>
+            <div style="font-size:0.78rem; color:var(--text-muted); margin-top:8px; text-align:center;">
+              คู่ภาพ: <code>pair1_thai_tax_invoice</code> (ใบเสร็จภาษีภาษาไทย Siam Vision)
+            </div>
+          </div>
+
+          <div class="scene-instructions">
+            <div class="instruction-step">
+              <span class="step-num">1</span>
+              <div class="step-content">
+                ที่ฝั่งขวาบน สลับ Radio Button เป็น: <strong>"Reference — 2 ภาพ (SIFT + RANSAC)"</strong>
+              </div>
+            </div>
+            <div class="instruction-step">
+              <span class="step-num">2</span>
+              <div class="step-content">
+                ที่ฝั่งซ้าย เลือก Dropdown: <strong>"🔍 [Demo Reference Pair 1] ใบเสร็จภาษีไทย Siam Vision (SIFT + RANSAC)"</strong><br>
+                <em>(ระบบจะโหลดภาพถ่ายเอียงใส่ช่องที่ 1 และภาพอ้างอิงตรงใส่ช่องที่ 2 ให้อัตโนมัติทันที!)</em>
+              </div>
+            </div>
+            <div class="instruction-step">
+              <span class="step-num">3</span>
+              <div class="step-content">
+                ตั้งค่าที่ฝั่งขวา: Feature Extractor = <code>SIFT</code>, Matcher = <code>BFMatcher</code>, Ratio = <code>0.75</code>
+              </div>
+            </div>
+            <div class="instruction-step">
+              <span class="step-num">4</span>
+              <div class="step-content">
+                กดปุ่ม <strong>"🚀 Run Scan Pipeline"</strong>
+              </div>
+            </div>
+            <div class="point-box">
+              <strong>จุดที่ต้องพูดกับอาจารย์ (ห้ามข้าม):</strong> ชี้หน้าต่าง <strong>Feature Matching Visualization</strong> บอกว่าเส้นสีเขียวคือ Inliers จาก RANSAC ถึง <strong>120 คู่ (81.6%)</strong> ที่จับคู่ข้อความภาษาไทยและตารางได้อย่างถูกต้อง และแสดงค่า Homography Matrix $H \in \mathbb{R}^{3 \times 3}$ ที่คำนวณได้
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 3 -->
+      <div class="scene-card">
+        <div class="scene-header">
+          <div class="scene-title">
+            <span class="tag-mode tag-edge">Edge Case 1</span>
+            ฉากที่ 3: แสงเงาทอดทับเฉียงรุนแรง (Heavy Shadow Demonstration)
+          </div>
+          <span class="scene-badge">เกณฑ์ Rubric 1.0 Pt</span>
+        </div>
+
+        <div class="scene-grid">
+          <div class="scene-image-preview">
+            <img src="demo/03_Edge_Cases/edge1_heavy_shadow.jpg" alt="Heavy Shadow">
+            <div style="padding:8px 12px; font-size:0.78rem; color:var(--text-muted);">
+              ไฟล์: <code>demo/03_Edge_Cases/edge1_heavy_shadow.jpg</code>
+            </div>
+          </div>
+
+          <div class="scene-instructions">
+            <div class="instruction-step">
+              <span class="step-num">1</span>
+              <div class="step-content">
+                สลับกลับมาโหมด <strong>"Auto — ภาพเดียว"</strong>
+              </div>
+            </div>
+            <div class="instruction-step">
+              <span class="step-num">2</span>
+              <div class="step-content">
+                เลือก Dropdown: <strong>"⚡ [Edge Case 1] แสงเงาทอดทับขอบกระดาษ (Heavy Shadow)"</strong>
+              </div>
+            </div>
+            <div class="instruction-step">
+              <span class="step-num">3</span>
+              <div class="step-content">
+                ชี้ให้อาจารย์เห็นว่าระบบตรวจพบเงาตัดขอบ จึงสลับเป็นกล่องเตือนสีส้ม (Fallback fullframe) โดยไม่ Crash
+              </div>
+            </div>
+            <div class="instruction-step">
+              <span class="step-num">4</span>
+              <div class="step-content">
+                เปิดติ๊กกล่อง: <strong>"🛠️ ปรับแต่งพิกัดมุม 4 จุดด้วยตนเอง (Manual Corner Adjustment)"</strong> เพื่อแสดงว่าผู้ใช้สามารถปรับตำแหน่งมุมแก้ปัญหาเงาได้
+              </div>
+            </div>
+            <div class="point-box">
+              <strong>จุดที่ต้องพูดกับอาจารย์:</strong> แสดงว่าระบบมี Exception Handling และ Fallback ไม่ปล่อยให้โปรแกรมพังเมื่อเจอเงาเข้ม พร้อมมอบอำนาจให้ผู้ใช้ควบคุมมุมมองได้เอง
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 4 -->
+      <div class="scene-card">
+        <div class="scene-header">
+          <div class="scene-title">
+            <span class="tag-mode tag-edge">Edge Case 2 &amp; 3</span>
+            ฉากที่ 4: พื้นหลังโต๊ะทำงานรก (Cluttered Desk) &amp; มุมถูกบดบัง (Corner Occluded)
+          </div>
+          <span class="scene-badge">เกณฑ์ Rubric 1.0 Pt</span>
+        </div>
+
+        <div class="scene-grid">
+          <div class="scene-pair-preview">
+            <div>
+              <img src="demo/03_Edge_Cases/edge2_cluttered_desk.jpg" alt="Cluttered Desk">
+              <div class="pair-label">edge2_cluttered_desk.jpg</div>
+            </div>
+            <div>
+              <img src="demo/03_Edge_Cases/edge3_corner_occluded.jpg" alt="Corner Occluded">
+              <div class="pair-label">edge3_corner_occluded.jpg</div>
+            </div>
+          </div>
+
+          <div class="scene-instructions">
+            <div class="instruction-step">
+              <span class="step-num">1</span>
+              <div class="step-content">
+                เลือก Dropdown: <strong>"⚡ [Edge Case 2] พื้นหลังโต๊ะทำงานรก (Cluttered Background)"</strong>
+              </div>
+            </div>
+            <div class="instruction-step">
+              <span class="step-num">2</span>
+              <div class="step-content">
+                ชี้ว่าโต๊ะมีทั้งแล็ปท็อป เมาส์ ปากกา โพสต์อิท แต่ระบบใช้ Fallback 1: <code>minAreaRect</code> หาขอบเอกสารหลักได้สำเร็จ
+              </div>
+            </div>
+            <div class="instruction-step">
+              <span class="step-num">3</span>
+              <div class="step-content">
+                สลับมาเลือก: <strong>"⚡ [Edge Case 3] มุมกระดาษถูกบดบัง (Corner Occluded)"</strong>
+              </div>
+            </div>
+            <div class="instruction-step">
+              <span class="step-num">4</span>
+              <div class="step-content">
+                ชี้ว่ามุมขวาล่างถูกแก้วกาแฟทับ → ใช้ <strong>Manual Adjustment</strong> เลื่อนสไลเดอร์จุด BR ออกจากแก้วกาแฟ แล้วกด Run
+              </div>
+            </div>
+            <div class="point-box">
+              <strong>จุดที่ต้องพูดกับอาจารย์:</strong> แสดงถึงความสมบูรณ์แบบในการรับมือ Edge Cases ทั้งแบบอัตโนมัติ (minAreaRect) และแบบมนุษย์ช่วย (Human-in-the-loop Manual Adjustment)
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast" id="toast">
+    <span>📋</span>
+    <span id="toastMsg">คัดลอกชื่อไฟล์แล้ว!</span>
+  </div>
+
+  <footer>
+    <p>คู่มือเตรียมสาธิตการใช้งานไฟล์ Demo บนหน้าเว็บ — CP461 Computer Vision Project</p>
+    <p style="margin-top:4px;">จัดทำโดย Naratip_517 | พร้อมใช้งานคู่กับ Streamlit Web App (app.py)</p>
+  </footer>
+
+  <script>
+    // Theme Switcher
+    const themeToggle = document.getElementById('themeToggle');
+    themeToggle.addEventListener('click', () => {
+      const currentTheme = document.documentElement.getAttribute('data-theme');
+      const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', newTheme);
+      localStorage.setItem('theme', newTheme);
+    });
+
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme) {
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    }
+
+    // Copy to Clipboard with Toast
+    function copyText(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        const toast = document.getElementById('toast');
+        const toastMsg = document.getElementById('toastMsg');
+        toastMsg.textContent = `คัดลอก "${text}" แล้ว!`;
+        toast.classList.add('show');
+        setTimeout(() => {
+          toast.classList.remove('show');
+        }, 2500);
+      });
+    }
+  </script>
+</body>
+</html>
